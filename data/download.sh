@@ -11,3 +11,8 @@ echo "done!"
 echo "creating a symlink at visual/public"
 pwd=$(pwd)
 ln -s $(pwd)/replays_json ../visual/public/data
+
+/afs/csail.mit.edu/u/a/apjacob/minirts/visual/public
+
+
+ln -s /tmp/apjacob/data/replays_json /afs/csail.mit.edu/u/a/apjacob/minirts/visual/public/data
