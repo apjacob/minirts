@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 
+
 #include "engine/common.h"
 #include "engine/game_state_ext.h"
 
@@ -106,6 +107,8 @@ class RTSGame : public tube::EnvThread {
   }
 
   void act(bool checkFrameSkip) {
+//    std::cout << "Acting inside game_base..." << std::endl;
+//    std::cout << "Game unique prefix: " << state_.GetUniquePrefix() << std::endl;
     auto t = state_.GetTick();
     for (const auto& bot : bots_) {
       if (!checkFrameSkip || (t + 1) % bot->frameSkip() == 0) {

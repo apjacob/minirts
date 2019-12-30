@@ -78,6 +78,15 @@ class ExecutorWrapper(nn.Module):
         else:
             inst, inst_len, inst_cont, coach_reply = self._get_human_instruction(batch)
 
+        # if batch['actor']=='act1':
+        #     for i in inst.cpu().numpy()[0]:
+        #         if i==927:
+        #             break
+        #         else:
+        #             print(self.coach.inst_dict._idx2word[i], end=" ")
+        #     print("")
+
+
         assert not self.executor.training
         executor_input = self.executor.format_executor_input(
             batch, inst, inst_len, inst_cont)
@@ -85,3 +94,5 @@ class ExecutorWrapper(nn.Module):
 
         reply = format_reply(batch, coach_reply, executor_reply)
         return reply
+
+

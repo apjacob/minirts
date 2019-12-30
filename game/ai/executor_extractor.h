@@ -52,6 +52,7 @@ class ExecutorExtractor {
     return {};
   }
 
+  //Send datablock for actor input
   std::vector<std::shared_ptr<DataBlock>> getActSend() {
     std::vector<std::shared_ptr<DataBlock>> blocks;
     for (auto& f : features_) {
@@ -61,9 +62,12 @@ class ExecutorExtractor {
       blocks.push_back(b);
     }
     blocks.push_back(reward_.buffer);
+    blocks.push_back(terminal_.buffer);
+    blocks.push_back(game_id_.buffer);
     return blocks;
   }
 
+  //Likely actor response, which needs to be acted upon
   std::vector<std::shared_ptr<DataBlock>> getActReply() {
     std::vector<std::shared_ptr<DataBlock>> blocks;
     for (auto& b : instruction_.getActReply()) {
@@ -104,6 +108,10 @@ class ExecutorExtractor {
       const CmdReceiver& receiver,
       const GameEnv& env,
       PlayerId playerId,
+      bool respectFow);
+
+  void addGameId(
+      const RTSGameOption& game_option,
       bool respectFow);
 
   // append current feature to trajectory
@@ -222,6 +230,9 @@ class ExecutorExtractor {
   // reward & terminal
   FixedLengthTrajectory reward_;
   FixedLengthTrajectory terminal_;
+
+  //So hacky
+  FixedLengthTrajectory game_id_;
 
   std::vector<std::reference_wrapper<FixedLengthTrajectory>> features_;
 };

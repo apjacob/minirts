@@ -50,6 +50,7 @@ PYBIND11_MODULE(minirts, m) {
       .def(py::init<const RTSGameOption&>())
       .def("info", &RTSGameOption::info)
       .def_readwrite("save_replay_prefix", &RTSGameOption::save_replay_prefix)
+      .def_readwrite("game_id", &RTSGameOption::game_id)
       .def_readwrite("save_replay_per_games", &RTSGameOption::save_replay_per_games)
       .def_readwrite("save_replay_freq", &RTSGameOption::save_replay_freq)
       .def_readwrite("seed", &RTSGameOption::seed)

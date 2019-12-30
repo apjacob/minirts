@@ -119,6 +119,13 @@ class DualExtractor {
     cheatExtractor_.computeFeatures(cheatPreload, receiver, env, playerId, false);
   }
 
+  void addGameId(
+      const RTSGameOption& game_option,
+      bool respectFow) {
+    normalExtractor_.addGameId(game_option, respectFow);
+    cheatExtractor_.addGameId(game_option, false);
+  }
+
   // append current feature to trajectory
   void pushGameFeature() {
     normalExtractor_.pushGameFeature();

@@ -10,7 +10,8 @@
 #include "engine/cmd_target.h"
 #include "engine/preload.h"
 #include "engine/mc_rule_actor.h"
-
+#include <sstream>
+#include <iostream>
 #include "ai/ai.h"
 #include "ai/cmd_reply.h"
 #include "ai/dual_extractor.h"
@@ -25,7 +26,8 @@ class CheatExecutorAI : public CheatExecutorAI_ {
       int threadId,
       std::shared_ptr<DataChannel> trainDc,
       std::shared_ptr<DataChannel> actDc)
-      : CheatExecutorAI_(
+      :
+      CheatExecutorAI_(
             opt,
             threadId,
             trainDc,
@@ -45,7 +47,8 @@ class CheatExecutorAI : public CheatExecutorAI_ {
                 opt.use_moving_avg,
                 opt.moving_avg_decay,
                 opt.verbose))
-  {}
+  {
+  }
 
   bool act(const RTSStateExtend& state, RTSAction* action) override {
     if (episodeStart_) {
@@ -56,14 +59,18 @@ class CheatExecutorAI : public CheatExecutorAI_ {
     const GameEnv& env = state.env();
     const CmdReceiver& receiver = state.receiver();
     const PlayerId playerId = getId();
-
+    const RTSGameOption& game_option = state.gameOption();
+    const std::string game_id = game_option.game_id;
     Preload preload;
     Preload cheatPreload;
 
     preload.GatherInfo(env, playerId, receiver, buildQueue, respectFow());
     cheatPreload.GatherInfo(env, playerId, receiver, buildQueue, false);
     extractor_->computeFeatures(preload, cheatPreload, receiver, env, playerId, respectFow());
+    extractor_->addGameId(game_option, respectFow());
 
+//    std::cout << "Game ID: " << game_id << std::endl;
+//    std::cout << "require train: " << requireTrain_ << std::endl;
     if (requireTrain_ && !episodeStart_) {
       extractor_->pushLastRAndTerminal();
     }

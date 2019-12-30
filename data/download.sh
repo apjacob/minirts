@@ -16,3 +16,6 @@ ln -s $(pwd)/replays_json ../visual/public/data
 
 
 ln -s /tmp/apjacob/data/replays_json /afs/csail.mit.edu/u/a/apjacob/minirts/visual/public/data
+ln -s /tmp/apjacob/data/dataset /afs/csail.mit.edu/u/a/apjacob/minirts/data/dataset
+
+ln -s /afs/csail.mit.edu/group/ei/lingo/apjacob/minirts-data /afs/csail.mit.edu/u/a/apjacob/minirts/data

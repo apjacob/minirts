@@ -10,6 +10,7 @@
 class RTSGameOption {
  public:
   std::string save_replay_prefix;  // "When not empty, save replays to the files
+  std::string game_id;
   int save_replay_per_games = 10;  // save replay once per K games
   int save_replay_freq = 0;  // save replay once per K tick (within one game)")
   int seed = 0;              // if seed = 0, then we use time(NULL)")
@@ -32,6 +33,7 @@ class RTSGameOption {
     std::stringstream ss;
     ss << std::boolalpha;
     ss << "Save replay prefix: \"" << save_replay_prefix << "\"" << std::endl;
+    ss << "Game id: \"" << game_id << "\"" << std::endl;
     ss << "Seed: " << seed << std::endl;
     ss << "Main Loop quota: " << main_loop_quota << std::endl;
     ss << "Max ticks: " << max_tick << std::endl;

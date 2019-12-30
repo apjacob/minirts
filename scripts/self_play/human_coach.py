@@ -18,7 +18,7 @@ import minirts
 from executor_wrapper import ExecutorWrapper
 from executor import Executor
 from common_utils import to_device
-
+from best_models import best_executors, best_coaches
 
 def create_game(ai1_option, ai2_option, game_option, *, act_name='act'):
     print('ai1 option:')
@@ -84,8 +84,8 @@ def parse_args():
     parser.add_argument('--save_replay_per_games', type=int, default=1)
 
     # model
-    from set_path import new_rnn_executor#, best_rnn_executor
-    parser.add_argument('--model_path', type=str, default=new_rnn_executor)
+    # from set_path import new_rnn_executor#, best_rnn_executor
+    parser.add_argument('--executor', type=str, default='')
 
     args = parser.parse_args()
     return args
@@ -142,7 +142,9 @@ if __name__ == '__main__':
     context, act_dc = create_game(ai1_option, ai2_option, game_option)
 
     device = torch.device('cuda:%d' % args.gpu)
-    executor = Executor.load(args.model_path).to(device)
+    args.executor = best_executors['rnn'] #RNN executor
+    executor = Executor.load(args.executor).to(device)
+
     print('top 500 insts')
     for inst  in executor.inst_dict._idx2inst[:500]:
         print(inst)

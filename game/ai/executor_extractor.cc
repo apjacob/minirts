@@ -86,7 +86,9 @@ ExecutorExtractor::ExecutorExtractor(
       resourceBin_(prefix+"resource_bin", tLen + 1, {numResourceBins}, torch::kFloat32),
       // reward & terminal
       reward_(prefix+"reward", tLen, {1}, torch::kFloat32),
-      terminal_(prefix+"terminal", tLen, {1}, torch::kFloat32)
+      terminal_(prefix+"terminal", tLen, {1}, torch::kFloat32),
+      //Game env and thread id
+      game_id_(prefix+"game_id", tLen, {1}, torch::kInt64)
 {
   // TODO: dirty hack for safety check
   assert(numPrevCmds_ == 25);
@@ -280,6 +282,16 @@ void ExecutorExtractor::computeFeatures(
     baseCountFeat_.getBuffer().copy_(countFeat_.getBuffer());
     gameStart_ = false;
   }
+}
+
+
+void ExecutorExtractor::addGameId(
+    const RTSGameOption& game_option,
+    bool respectFow) {
+
+    const std::string game_id = game_option.game_id;
+    int game_id_i = stoi(game_id);
+    game_id_.getBuffer()[0] = game_id_i;
 }
 
 void ExecutorExtractor::computeLastRAndTerminal(int, const GameEnv& env, PlayerId playerId) {

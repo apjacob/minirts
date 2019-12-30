@@ -42,6 +42,10 @@ class RTSState_ {
     return _cmd_receiver;
   }
 
+  const RTSGameOption& gameOption() const {
+    return _option;
+  }
+
   // TODO: temp hack for executor ai
   CmdReceiver& receiver() {
     return _cmd_receiver;
