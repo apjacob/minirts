@@ -387,7 +387,7 @@ class ConvRnnCoach(nn.Module):
             batch['cand_inst'], batch['cand_inst_len'], glob_feat)
 
         if mode in ['good', 'better']:
-            assert False
+            #assert False
             if mode == 'better':
                 mask = torch.tensor(gc.better_inst_mask).float().to(inst_prob.device)
             else:
