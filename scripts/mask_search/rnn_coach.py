@@ -376,7 +376,7 @@ class ConvRnnCoach(nn.Module):
         batch['cand_inst_len'] = inst_len
         return batch
 
-    def rl_forward(self, batch, mode):
+    def rl_forward(self, batch, mode, agent_mask=None):
         """forward function use by RL
         """
         batch = self._format_rl_language_input(batch)
@@ -386,12 +386,18 @@ class ConvRnnCoach(nn.Module):
         inst_prob = self.inst_selector.compute_prob(
             batch['cand_inst'], batch['cand_inst_len'], glob_feat)
 
-        if mode in ['good', 'better']:
+        if mode in ['good', 'better', 'custom']:
             #assert False
+
+
             if mode == 'better':
                 mask = torch.tensor(gc.better_inst_mask).float().to(inst_prob.device)
-            else:
+            elif mode == 'good':
                 mask = torch.tensor(gc.good_inst_mask).float().to(inst_prob.device)
+            else:
+                assert agent_mask is not None
+                mask = torch.tensor(agent_mask).float().to(inst_prob.device)
+
             mask = mask.unsqueeze(0)
             inst_prob = inst_prob * mask
             inst_prob = inst_prob / inst_prob.sum(1, keepdim=True)
@@ -405,14 +411,14 @@ class ConvRnnCoach(nn.Module):
         }
         return output
 
-    def sample(self, batch, mode, word_based=True):
+    def sample(self, batch, mode, word_based=True, agent_mask=None):
         """used for actor in ELF and visually evaulating model
 
         return
             inst: [batch, max_sentence_len], even inst is one-hot
             inst_len: [batch]
         """
-        output = self.rl_forward(batch, mode)
+        output = self.rl_forward(batch, mode, agent_mask=agent_mask)
         samples = self.sampler.sample(
             output['cont_pi'], output['inst_pi'], batch['prev_inst_idx'])
 

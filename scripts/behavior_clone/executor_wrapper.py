@@ -39,6 +39,9 @@ class ExecutorWrapper(nn.Module):
         inst = input('Please input your instruction\n')
         # inst = 'build peasant'
 
+        import pdb
+        pdb.set_trace()
+
         inst_idx = torch.zeros((1,)).long().to(device)
         inst_idx[0] = self.executor.inst_dict.get_inst_idx(inst)
         inst_cont = torch.zeros((1,)).long().to(device)

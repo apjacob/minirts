@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 #
 from common_utils import assert_eq
-
+import torch
 
 class ContSoftmaxSampler:
     def __init__(self, cont_key, cont_prob_key, key, prob_key):
@@ -41,6 +41,15 @@ class ContSoftmaxSampler:
             samples: [batch]
         """
         assert_eq(cont_probs.size(1), 2)
+
+        if True in torch.isnan(cont_probs.sum(1)):
+            import pdb
+            pdb.set_trace()
+
+        # print("Cont prob sum: ", cont_probs.sum(1))
+        # print("Prob_size: ", probs.size())
+        # print("Probs_sum: ", probs.sum(1))
+
         cont_samples = cont_probs.multinomial(1).squeeze(1)
         new_samples = probs.multinomial(1).squeeze(1)
 
@@ -68,14 +77,14 @@ class ContSoftmaxSampler:
         cont_probs = probs[self.cont_prob_key]
         probs_ = probs[self.prob_key]
         cont_samples = samples[self.cont_key]#.float()
-        samples_ = samples[self.key].clamp(min=0, max=probs_.size(0) - 1)
+        samples_ = samples[self.key]
 
         # assert_eq(cont_samples.size(1), 1)
         # assert_eq(samples_.size(1), 1)
 
-        prob = probs_.gather(1, samples_).squeeze(1)
+        prob = probs_.gather(1, samples_.unsqueeze(1)).squeeze(1)
         # cont_prob = cont_probs.gather(1, cont_samples.unsqueeze(1)).squeeze(1)
-        cont_samples = cont_samples.squeeze(1).float()
+        cont_samples = cont_samples.float()
         final_prob = (cont_samples * cont_probs[:, 1]
                       + (1 - cont_samples) * prob * cont_probs[:, 0])
         # print('>>>', final_prob.size())

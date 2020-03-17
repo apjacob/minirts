@@ -37,6 +37,8 @@ class ExecutorWrapper(nn.Module):
         device = batch['prev_inst'].device
 
         inst = input('Please input your instruction\n')
+        import pdb
+        pdb.set_trace()
         # inst = 'build peasant'
 
         inst_idx = torch.zeros((1,)).long().to(device)
@@ -66,15 +68,20 @@ class ExecutorWrapper(nn.Module):
 
     def forward(self, batch):
         if self.coach is not None:
-            assert not self.coach.training
-            if self.cheat:
-                coach_input = self.coach.format_coach_input(batch, 'nofow_')
-                # print(coach_input['enemy_units'])
-            else:
-                coach_input = self.coach.format_coach_input(batch)
+            #assert not self.coach.training
+            coach_input = self.coach.format_coach_input(batch)
             word_based = is_word_based(self.executor.args.inst_encoder_type)
-            inst, inst_len, inst_cont, coach_reply = self.coach.sample(
-                coach_input, self.inst_mode, word_based)
+
+            # if batch['actor'] == 'act2':
+            #     inst_mode = 'mask'
+            #     # print("Actor 2 is using custom mask...")
+            # else:
+            #     inst_mode = self.inst_mode
+
+            inst_mode = self.inst_mode
+
+            inst, inst_len, inst_cont, coach_reply, log_prob_reply = self.coach.sample(
+                coach_input, inst_mode, word_based)
         else:
             inst, inst_len, inst_cont, coach_reply = self._get_human_instruction(batch)
 
@@ -87,12 +94,67 @@ class ExecutorWrapper(nn.Module):
         #     print("")
 
 
-        assert not self.executor.training
+        #assert not self.executor.training
         executor_input = self.executor.format_executor_input(
             batch, inst, inst_len, inst_cont)
         executor_reply = self.executor.compute_prob(executor_input)
 
         reply = format_reply(batch, coach_reply, executor_reply)
-        return reply
+
+        return reply, log_prob_reply
+
+    def get_coach_rl_train_loss(self, batch):
+
+        assert self.coach.training
+
+        coach_input = self.coach.format_coach_input(batch)
+        word_based = is_word_based(self.executor.args.inst_encoder_type)
+        inst, inst_len, inst_cont, coach_reply, log_prob_reply = self.coach.sample(
+            coach_input, self.inst_mode, word_based)
+
+        ## Replacing with training samples
+        log_prob_reply['samples'] = {'inst': batch['inst'], 'cont': batch['cont']}
+        value = log_prob_reply['value'] #coach_reply['value']
+        loss = self.coach.sampler.get_log_prob(log_prob_reply['probs'], log_prob_reply['samples'])
+
+        return loss, value
 
 
+    #### Executor train forward ####
+
+    def exec_train_forward(self, batch):
+        if self.coach is not None:
+            #assert not self.coach.training
+            coach_input = self.coach.format_coach_input(batch)
+            word_based = is_word_based(self.executor.args.inst_encoder_type)
+
+            # if batch['actor'] == 'act2':
+            #     inst_mode = 'mask'
+            #     # print("Actor 2 is using custom mask...")
+            # else:
+            #     inst_mode = self.inst_mode
+
+            inst_mode = self.inst_mode
+
+            inst, inst_len, inst_cont, coach_reply, log_prob_reply = self.coach.sample(
+                coach_input, inst_mode, word_based)
+        else:
+            inst, inst_len, inst_cont, coach_reply = self._get_human_instruction(batch)
+
+        # if batch['actor']=='act1':
+        #     for i in inst.cpu().numpy()[0]:
+        #         if i==927:
+        #             break
+        #         else:
+        #             print(self.coach.inst_dict._idx2word[i], end=" ")
+        #     print("")
+
+
+        #assert not self.executor.training
+        executor_input = self.executor.format_executor_input(
+            batch, inst, inst_len, inst_cont)
+        executor_reply = self.executor.compute_prob(executor_input)
+
+        reply = format_reply(batch, coach_reply, executor_reply)
+
+        return reply, log_prob_reply

@@ -64,7 +64,7 @@ class ExecutorWrapper(nn.Module):
 
         return inst, inst_len, inst_cont, reply
 
-    def forward(self, batch):
+    def forward(self, batch, agent_mask=None):
         if self.coach is not None:
             assert not self.coach.training
             if self.cheat:
@@ -74,7 +74,7 @@ class ExecutorWrapper(nn.Module):
                 coach_input = self.coach.format_coach_input(batch)
             word_based = is_word_based(self.executor.args.inst_encoder_type)
             inst, inst_len, inst_cont, coach_reply = self.coach.sample(
-                coach_input, self.inst_mode, word_based)
+                coach_input, self.inst_mode, word_based, agent_mask=agent_mask)
         else:
             inst, inst_len, inst_cont, coach_reply = self._get_human_instruction(batch)
 

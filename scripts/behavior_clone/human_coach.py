@@ -166,6 +166,8 @@ if __name__ == '__main__':
         data = to_device(data, device)
         # import IPython
         # IPython.embed()
+        import pdb
+        pdb.set_trace()
         reply = executor_wrapper.forward(data)
 
         # reply = {key : reply[key].detach().cpu() for key in reply}

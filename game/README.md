@@ -58,7 +58,7 @@ Game play
 
 Shortcut
 ------------
-
+cd
 1. Move
 Click one unit, and click an empty place.
 

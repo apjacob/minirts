@@ -382,16 +382,32 @@ class ConvRnnCoach(nn.Module):
         batch = self._format_rl_language_input(batch)
         glob_feat = self._forward(batch)
         v = self.value(glob_feat).squeeze()
+
+        #print("Glob Feature norm: ", glob_feat.norm(2))
+
         cont_prob = self.cont_cls.compute_prob(glob_feat)
         inst_prob = self.inst_selector.compute_prob(
             batch['cand_inst'], batch['cand_inst_len'], glob_feat)
 
-        if mode in ['good', 'better']:
-            assert False
-            if mode == 'better':
-                mask = torch.tensor(gc.better_inst_mask).float().to(inst_prob.device)
-            else:
-                mask = torch.tensor(gc.good_inst_mask).float().to(inst_prob.device)
+        if mode is 'mask':
+            ############CUSTOM Analysis code################
+            winning_traj_mask = [449, 265, 330, 323, 38, 268, 198, 207, 188, 336, 358, 406, 276, 196, 202, 33, 169,
+                                 480,
+                                 383, 267, 365, 226, 105, 474, 79, 439, 341, 315, 143, 414, 331, 447, 239, 91, 282,
+                                 215,
+                                 458, 446, 108, 98, 351, 31, 218, 160, 34, 296, 145, 440, 374, 132, 468, 83, 376,
+                                 254,
+                                 94, 61, 71, 256, 277, 298, 495, 200, 322, 388, 8, 423, 355, 378, 450, 387, 41, 154,
+                                 392,
+                                 308, 479, 11, 216, 396, 62, 287, 193, 137, 208, 32, 261, 171, 163, 109, 338, 476,
+                                 238,
+                                 107, 190, 53, 135, 303, 249, 44, 217, 490]
+            # winning_traj_mask = [0, 2, 11, 20, 78, 316, 9, 4, 92, 8, 14, 128, 5, 45, 12, 67, 116, 22, 80, 113]
+            np_custom_mask = np.zeros(500)
+            np_custom_mask[winning_traj_mask] = 1
+
+
+            mask = torch.tensor(np_custom_mask).float().to(inst_prob.device)
             mask = mask.unsqueeze(0)
             inst_prob = inst_prob * mask
             inst_prob = inst_prob / inst_prob.sum(1, keepdim=True)
@@ -415,6 +431,13 @@ class ConvRnnCoach(nn.Module):
         output = self.rl_forward(batch, mode)
         samples = self.sampler.sample(
             output['cont_pi'], output['inst_pi'], batch['prev_inst_idx'])
+
+        log_prob_reply = {
+        'samples': samples,
+        'probs': {self.sampler.cont_prob_key: output['cont_pi'],
+                  self.sampler.prob_key: output['inst_pi']},
+        'value': output['v']
+        }
 
         reply = {
             'cont': samples['cont'].unsqueeze(1),
@@ -444,4 +467,5 @@ class ConvRnnCoach(nn.Module):
 
         inst_len = torch.LongTensor(lengths).to(device)
         reply['raw_inst'] = torch.LongTensor(raws).to(device)
-        return inst, inst_len, reply['cont'], reply
+
+        return inst, inst_len, reply['cont'], reply, log_prob_reply

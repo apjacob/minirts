@@ -398,6 +398,7 @@ class GlobClsHead(nn.Module):
 
     def compute_prob(self, globfeat, *, temp=1, log=False):
         logit = self.forward(globfeat)
+        # print("CLS Prob norm: ", logit.norm(2))
         logit = logit / temp
         # logit [batch, 2]
         if log:
