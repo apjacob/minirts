@@ -320,9 +320,9 @@ class DotAttackHead(nn.Module):
         mask: [batch, padded_num_unit]
           mask[i] = 1 iff unit i is true unit and its cmd_type == ATTACK
         """
-        if target_idx.min() < 0 or (target_idx.max(1)[0] > num_enemy).any():
-            import pdb
-            pdb.set_trace()
+        # if target_idx.min() < 0 or (target_idx.max(1)[0] > num_enemy).any():
+        #     import pdb
+        #     pdb.set_trace()
 
         batch, pnum_unit, _ = ufeat.size()
         assert_eq(target_idx.size(), (batch, pnum_unit))

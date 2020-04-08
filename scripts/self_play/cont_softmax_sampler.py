@@ -82,11 +82,11 @@ class ContSoftmaxSampler:
         # assert_eq(cont_samples.size(1), 1)
         # assert_eq(samples_.size(1), 1)
 
-        prob = probs_.gather(1, samples_.unsqueeze(1)).squeeze(1)
+        prob = probs_.gather(1, samples_).squeeze(1)
         # cont_prob = cont_probs.gather(1, cont_samples.unsqueeze(1)).squeeze(1)
         cont_samples = cont_samples.float()
-        final_prob = (cont_samples * cont_probs[:, 1]
-                      + (1 - cont_samples) * prob * cont_probs[:, 0])
+        final_prob = (cont_samples.squeeze(1) * cont_probs[:, 1]
+                      + (1 - cont_samples.squeeze(1)) * prob * cont_probs[:, 0])
         # print('>>>', final_prob.size())
         return final_prob.log()
 

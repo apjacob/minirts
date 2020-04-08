@@ -94,6 +94,8 @@ class ExecutorExtractor {
       Preload* preload,
       std::map<UnitId, CmdBPtr>* assignedCmds,
       std::mt19937* rng) {
+
+    //TODO: Retrieve the samples and push to the fixed trajectory
     cmdReply_.writeCmds(env, receiver, playerId, preload, assignedCmds, rng);
   }
 
@@ -212,6 +214,8 @@ class ExecutorExtractor {
   FixedLengthTrajectory cCmdGatherIdx_;
   FixedLengthTrajectory cCmdAttackIdx_;
   FixedLengthTrajectory pCmdType_;
+
+  //TODO: Add more of the current commands here
 
   FixedLengthTrajectory numEnemy_;
   FixedLengthTrajectory enemyType_;

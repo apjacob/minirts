@@ -158,4 +158,6 @@ class AggregatedCmdReply {
   std::vector<int64_t> targetType_;
   std::vector<int64_t> targetX_;
   std::vector<int64_t> targetY_;
+
+  // TODO: Can possibly add all sampled actions here from the datablock mentioned above
 };

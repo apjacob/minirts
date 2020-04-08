@@ -70,6 +70,7 @@ ExecutorExtractor::ExecutorExtractor(
       cCmdGatherIdx_(prefix+"current_cmd_gather_idx", tLen + 1, {maxNumUnits}, torch::kInt64),
       cCmdAttackIdx_(prefix+"current_cmd_attack_idx", tLen + 1, {maxNumUnits}, torch::kInt64),
       pCmdType_(prefix+"prev_cmd", tLen + 1, {maxNumUnits, numPrevCmds}, torch::kInt64),
+      //TODO: Add more current cmds here
       // enemy basic
       numEnemy_(prefix+"num_enemy", tLen + 1, {1}, torch::kInt64),
       enemyType_(prefix+"enemy_type", tLen + 1, {maxNumUnits}, torch::kInt64),
@@ -117,6 +118,8 @@ ExecutorExtractor::ExecutorExtractor(
   features_.push_back(std::ref(cCmdGatherIdx_));
   features_.push_back(std::ref(cCmdAttackIdx_));
   features_.push_back(std::ref(pCmdType_));
+
+  //TODO: add more of the current command type here
 
   features_.push_back(std::ref(numEnemy_));
   features_.push_back(std::ref(enemyType_));
@@ -175,7 +178,7 @@ void ExecutorExtractor::newGame() {
   // std::cout << "=================NEW GAME===============" << std::endl;
   // reset volatile feature / buffer
   reset();
-
+q
   // clear persistent feature / buffer
   baseCountFeat_.getBuffer().zero_();
   movingEnemyCount_.getBuffer().zero_();
@@ -446,6 +449,8 @@ void ExecutorExtractor::computeArmyExtra(
   auto cCmdY = cCmdY_.getBuffer().accessor<int64_t, 1>();
   auto cCmdGatherIdx = cCmdGatherIdx_.getBuffer().accessor<int64_t, 1>();
   auto cCmdAttackIdx = cCmdAttackIdx_.getBuffer().accessor<int64_t, 1>();
+
+  //TODO: Add more of the current command type here
 
   auto pCmdType = pCmdType_.getBuffer().accessor<int64_t, 2>();
   const auto& myTroops = preload.MyTroops();
