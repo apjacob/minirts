@@ -70,7 +70,8 @@ ExecutorExtractor::ExecutorExtractor(
       cCmdGatherIdx_(prefix+"current_cmd_gather_idx", tLen + 1, {maxNumUnits}, torch::kInt64),
       cCmdAttackIdx_(prefix+"current_cmd_attack_idx", tLen + 1, {maxNumUnits}, torch::kInt64),
       pCmdType_(prefix+"prev_cmd", tLen + 1, {maxNumUnits, numPrevCmds}, torch::kInt64),
-      //TODO: Add more current cmds here
+      //TODO: Add more sampled cmds here
+      //sCmdType_(prefix+"sampled_cmd_type", tLen + 1, {maxNumUnits}, torch::kInt64),
       // enemy basic
       numEnemy_(prefix+"num_enemy", tLen + 1, {1}, torch::kInt64),
       enemyType_(prefix+"enemy_type", tLen + 1, {maxNumUnits}, torch::kInt64),
@@ -119,7 +120,8 @@ ExecutorExtractor::ExecutorExtractor(
   features_.push_back(std::ref(cCmdAttackIdx_));
   features_.push_back(std::ref(pCmdType_));
 
-  //TODO: add more of the current command type here
+  features_.push_back(std::ref(sCmdType_));
+  //TODO: add sampled command type here
 
   features_.push_back(std::ref(numEnemy_));
   features_.push_back(std::ref(enemyType_));
@@ -178,7 +180,7 @@ void ExecutorExtractor::newGame() {
   // std::cout << "=================NEW GAME===============" << std::endl;
   // reset volatile feature / buffer
   reset();
-q
+
   // clear persistent feature / buffer
   baseCountFeat_.getBuffer().zero_();
   movingEnemyCount_.getBuffer().zero_();
@@ -630,6 +632,8 @@ void ExecutorExtractor::clearFeatures() {
   cCmdAttackIdx_.getBuffer().zero_();
   pCmdType_.getBuffer().zero_();
 
+  sCmdType_.getBuffer().zero_();
+
   numEnemy_.getBuffer().zero_();
   enemyType_.getBuffer().zero_();
   enemyHp_.getBuffer().zero_();
@@ -644,3 +648,11 @@ void ExecutorExtractor::clearFeatures() {
 
   resourceBin_.getBuffer().zero_();
 }
+
+//void ExecutorExtractor::addSampledCmds(const Preload& preload){
+//    auto sCmdType = sCmdType_.getBuffer().accessor<int64_t, 1>();
+//    auto cmdSamples = cmdReply_.getCmdType();
+//    std::cout << "Current Sample: " << cmdSamples << std::endl;
+//    std::cout << "Current Sample size: " << cmdReply_.getCmdType().size() << std::endl;
+//    sCmdType[0] = cmdSamples[0];
+//}

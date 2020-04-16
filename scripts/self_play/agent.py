@@ -246,12 +246,12 @@ class Agent:
                     sliced_batch = slice_batch(batch, s, e)
 
                     log_prob, all_losses, value = self.model.get_executor_rl_train_loss(sliced_batch)
-                    l1 = (r * torch.ones_like(value) - value.detach()) * log_prob
+                    l1 = r*log_prob #(r * torch.ones_like(value) - value.detach()) * log_prob
                     l2 = mse(value, r * torch.ones_like(value))
 
                     l1_mean = -1.0 * l1.mean()
-                    mse_loss = 0.1 * l2.mean()
-                    policy_loss = l1_mean + mse_loss
+                    mse_loss = 1.0 * l2.mean()
+                    policy_loss = l1_mean #+ mse_loss
 
                     policy_loss.backward()
                     l1_losses.append(l1_mean.item())

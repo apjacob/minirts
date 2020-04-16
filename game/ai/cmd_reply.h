@@ -92,6 +92,8 @@ class AggregatedCmdReply {
 
   void logCmds(const Preload& preload, const GameEnv& env) const;
 
+  std::vector<int64_t> getCmdType();
+
   bool sampleCmds(std::mt19937* rng);
 
   void writeCmds(

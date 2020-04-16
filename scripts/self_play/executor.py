@@ -716,6 +716,13 @@ class Executor(nn.Module):
                      + build_unit_loss
                      + build_building_loss)
 
+        # unit_loss = cmd_type_loss
+        # unit_loss = move_loss + attack_loss
+        # unit_loss = build_unit_loss + build_building_loss
+        # unit_loss = gather_loss
+        #unit_loss = cmd_type_loss
+        #unit_loss = attack_loss
+
         log_prob = -unit_loss
 
         all_loss = {

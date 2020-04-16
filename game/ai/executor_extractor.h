@@ -97,6 +97,18 @@ class ExecutorExtractor {
 
     //TODO: Retrieve the samples and push to the fixed trajectory
     cmdReply_.writeCmds(env, receiver, playerId, preload, assignedCmds, rng);
+    // addSampledCmds(preload);
+
+//    auto sCmdType = sCmdType_.getBuffer().accessor<int64_t, 1>();
+//    auto cmdSamples = cmdReply_.getCmdType();
+//    std::cout << "Current Sample: " << cmdSamples << std::endl;
+//    std::cout << "Current Sample size: " << cmdReply_.getCmdType().size() << std::endl;
+//    std::cout << "maxNumUnits_: " << maxNumUnits_ << std::endl;
+//
+//    for (int i = 0; i < maxNumUnits_; ++i) {
+//        sCmdType[i] = cmdSamples[i];
+//    }
+
   }
 
   // AggregatedCmdReply& cmdReply() {
@@ -173,6 +185,9 @@ class ExecutorExtractor {
 
   void computeUnitConsCount(const Preload& preload);
 
+  //New
+  //void addSampledCmds(const Preload& preload);
+
   void computeResourceBin(const Preload& preload);
 
   void computeMapFeature(
@@ -215,6 +230,7 @@ class ExecutorExtractor {
   FixedLengthTrajectory cCmdAttackIdx_;
   FixedLengthTrajectory pCmdType_;
 
+//  FixedLengthTrajectory sCmdType_;
   //TODO: Add more of the current commands here
 
   FixedLengthTrajectory numEnemy_;

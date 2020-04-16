@@ -487,3 +487,7 @@ void AggregatedCmdReply::writeCmds(
     }
   }
 }
+
+std::vector<int64_t> AggregatedCmdReply::getCmdType(){
+    return cmdType_;
+}
