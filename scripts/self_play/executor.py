@@ -404,14 +404,14 @@ class Executor(nn.Module):
             'ys': batch['resource_y'],
             'num_units': batch['num_resource'].squeeze(1),
         }
-        target_cmds = {
-            'cmd_type': batch['t_current_cmd_type'],
-            'target_type': batch['t_current_cmd_unit_type'],
-            'target_x': batch['t_current_cmd_x'],
-            'target_y': batch['t_current_cmd_y'],
-            'target_gather_idx': batch['t_current_cmd_gather_idx'],
-            'target_attack_idx': batch['t_current_cmd_attack_idx'],
-        }
+        # target_cmds = {
+        #     'cmd_type': batch['t_current_cmd_type'],
+        #     'target_type': batch['t_current_cmd_unit_type'],
+        #     'target_x': batch['t_current_cmd_x'],
+        #     'target_y': batch['t_current_cmd_y'],
+        #     'target_gather_idx': batch['t_current_cmd_gather_idx'],
+        #     'target_attack_idx': batch['t_current_cmd_attack_idx'],
+        # }
         current_cmds = {
             'cmd_type': batch['current_cmd_type'],
             'target_type': batch['current_cmd_unit_type'],
@@ -466,7 +466,6 @@ class Executor(nn.Module):
             'enemy_units': enemy_units,
             'resource_units': resource_units,
             'prev_cmds': prev_cmds,
-            'target_cmds': target_cmds,
             'current_cmds': current_cmds,
             'map': batch['map'],
         }
@@ -797,3 +796,23 @@ class Executor(nn.Module):
             'move_loc_prob': move_loc,
         }
         return probs
+
+    def compute_log_prob(self, batch, executor_reply):
+        log_probs = {}
+        log_prob_sum = 0
+
+        for (name, prob) in executor_reply.items():
+
+            cur_sample = batch["sample_" + name]
+
+            if name == "glob_cont_prob":
+                prob_ = prob.gather(1, cur_sample.unsqueeze(1))
+            else:
+                prob_ = prob.gather(2, cur_sample.unsqueeze(2)).squeeze(2)
+
+            log_prob = prob_.log()
+            log_probs["log_" + name] = log_prob.sum(1)
+            log_prob_sum += log_probs["log_" + name]
+
+
+        return log_prob_sum, log_probs

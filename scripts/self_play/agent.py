@@ -32,7 +32,7 @@ reward_tuple = [("win", 1), ("loss", -1)]
 
 class Agent:
 
-    def __init__(self, coach, executor, device, args, writer, trainable=False):
+    def __init__(self, coach, executor, device, args, writer, trainable=False, exec_sample=False):
 
         self.__coach        = coach
         self.__executor     = executor
@@ -45,8 +45,9 @@ class Agent:
         self.tb_writer      = writer
         self.traj_dict      = defaultdict(list)
         self.result_dict    = {}
-        self.result        = ResultStat('reward', None)
+        self.result         = ResultStat('reward', None)
         self.model = self.load_model(self.__coach, self.__executor, self.args)
+        self.exec_sample    = exec_sample
 
         if self.__trainable:
             self.optimizer = optim.Adam(self.model.coach.parameters(), lr=args.lr)
@@ -81,14 +82,13 @@ class Agent:
 
     def simulate(self, index, batch):
         with torch.no_grad():
-            reply, coach_reply = self.model.forward(batch)
+            reply, coach_reply = self.model.forward(batch, self.exec_sample)
 
             if self.__trainable:
                 assert self.sa_buffer is not None
 
                 ## Add coach reply to state-reply dict
                 # batch.update(coach_reply['samples'])
-                batch.update(reply)
                 rv = self.sa_buffer.push(index, batch)
 
             return reply
@@ -205,8 +205,8 @@ class Agent:
         if len(self.sa_buffer):
 
             win_batches, loss_batches = self.sa_buffer.pop(self.result_dict)
-            self.align_executor_actions(win_batches)
-            self.align_executor_actions(loss_batches)
+            # self.align_executor_actions(win_batches)
+            # self.align_executor_actions(loss_batches)
 
             l1_loss, mse_loss, value = self.__update_executor(win_batches, loss_batches)
 
@@ -225,15 +225,14 @@ class Agent:
 
         mse = torch.nn.MSELoss(reduction='none')
 
-        l1_losses = []
-        mse_losses = []
-        total_values = []
+        denom = np.sum([y['inst'].size()[0] for x, y in win_batches.items()]) + \
+                np.sum([y['inst'].size()[0] for x, y in loss_batches.items()])
+
+        l1_losses = 0
+        mse_losses = 0
+        total_values = 0
 
         for (kind, r), batches in zip(reward_tuple, [win_batches, loss_batches]):
-            # if kind == "win":
-            #     denom = np.sum([y['inst'].size()[0] for x, y in win_batches.items()])
-            # else:
-            #     denom = np.sum([y['inst'].size()[0] for x, y in loss_batches.items()])
 
             for game_id, batch in batches.items():
 
@@ -249,21 +248,23 @@ class Agent:
                     l1 = r*log_prob #(r * torch.ones_like(value) - value.detach()) * log_prob
                     l2 = mse(value, r * torch.ones_like(value))
 
-                    l1_mean = -1.0 * l1.mean()
-                    mse_loss = 1.0 * l2.mean()
+                    l1_mean = -1.0 * l1.sum() / denom
+                    mse_loss = 1.0 * l2.sum() / denom
                     policy_loss = l1_mean #+ mse_loss
 
                     policy_loss.backward()
-                    l1_losses.append(l1_mean.item())
-                    mse_losses.append(mse_loss.item())
-                    total_values.append(value.mean().item())
 
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.grad_clip)
-                    self.optimizer.step()
-                    self.optimizer.zero_grad()
+                    l1_losses += l1_mean.item()
+                    mse_losses += mse_loss.item()
+                    total_values += value.sum().item()/denom
+
+
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.grad_clip)
+        self.optimizer.step()
+        self.optimizer.zero_grad()
 
         self.model.eval()
-        return np.mean(l1_losses), np.mean(mse_losses), np.mean(total_values)
+        return l1_losses, mse_losses, total_values
 
     def save_executor(self, index):
         pass
@@ -382,7 +383,7 @@ def run_eval(args, model1, model2, device):
 
                 result1.feed(batch)
                 with torch.no_grad():
-                    reply, _ = model1.forward(batch)
+                    reply, _ = model1.forward(batch, exec_sample=True)
 
             elif key == 'act2':
                 batch['actor'] = 'act2'

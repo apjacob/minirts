@@ -6,6 +6,8 @@
 #
 import torch
 import torch.nn as nn
+from torch.distributions.one_hot_categorical import OneHotCategorical
+from torch.distributions.categorical import Categorical
 import copy
 from common_utils import assert_eq, assert_lt
 from utils import convert_to_raw_instruction
@@ -27,6 +29,18 @@ def format_reply(batch, coach_reply, executor_reply):
     reply['num_unit'] = batch['num_army']
     return reply
 
+
+def construct_samples(executor_reply):
+
+    onehot_reply = {}
+    sample_reply = {}
+
+    for (k, v) in executor_reply.items():
+        one_hot = OneHotCategorical(v).sample()
+        onehot_reply[k] = one_hot
+        sample_reply["sample_" + k] = Categorical(one_hot).sample()
+
+    return onehot_reply, sample_reply
 
 class ExecutorWrapper(nn.Module):
     def __init__(self, coach, executor, num_insts, max_raw_chars, cheat, inst_mode):
@@ -75,7 +89,7 @@ class ExecutorWrapper(nn.Module):
 
         return inst, inst_len, inst_cont, reply
 
-    def forward(self, batch):
+    def forward(self, batch, exec_sample=False):
         if self.coach is not None:
             #assert not self.coach.training
             coach_input = self.coach.format_coach_input(batch)
@@ -93,7 +107,16 @@ class ExecutorWrapper(nn.Module):
             batch, inst, inst_len, inst_cont)
         executor_reply = self.executor.compute_prob(executor_input)
 
+        if exec_sample:
+            one_hot_reply, sample_reply = construct_samples(executor_reply)
+            batch.update(one_hot_reply)
+            batch.update(sample_reply)
+
+            executor_reply = one_hot_reply
+            ####
+
         reply = format_reply(batch, coach_reply, executor_reply)
+        batch.update(reply)
 
         ## Added more elements to batch
         batch['e_inst'] = inst
@@ -203,9 +226,11 @@ class ExecutorWrapper(nn.Module):
         # assert not self.executor.training
         executor_input = self.executor.format_rl_executor_input(
             batch, inst, inst_len, inst_cont)
-        # executor_reply = self.executor.compute_prob(executor_input)
-        log_prob, all_losses = self.executor.compute_rl_log_probs(executor_input)
+        executor_reply = self.executor.compute_prob(executor_input)
+        log_prob_sum, all_log_probs = self.executor.compute_log_prob(batch, executor_reply)
+
+        # log_prob, all_losses = self.executor.compute_rl_log_probs(executor_input)
         value = log_prob_reply['value']
         #log_probs, masks = self.log_probs(batch, executor_reply)
 
-        return log_prob, all_losses, value
+        return log_prob_sum, all_log_probs, value

@@ -120,7 +120,7 @@ ExecutorExtractor::ExecutorExtractor(
   features_.push_back(std::ref(cCmdAttackIdx_));
   features_.push_back(std::ref(pCmdType_));
 
-  features_.push_back(std::ref(sCmdType_));
+//  features_.push_back(std::ref(sCmdType_));
   //TODO: add sampled command type here
 
   features_.push_back(std::ref(numEnemy_));
@@ -632,7 +632,7 @@ void ExecutorExtractor::clearFeatures() {
   cCmdAttackIdx_.getBuffer().zero_();
   pCmdType_.getBuffer().zero_();
 
-  sCmdType_.getBuffer().zero_();
+  //sCmdType_.getBuffer().zero_();
 
   numEnemy_.getBuffer().zero_();
   enemyType_.getBuffer().zero_();
