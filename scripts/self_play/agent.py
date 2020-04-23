@@ -225,8 +225,7 @@ class Agent:
 
         mse = torch.nn.MSELoss(reduction='none')
 
-        denom = np.sum([y['inst'].size()[0] for x, y in win_batches.items()]) + \
-                np.sum([y['inst'].size()[0] for x, y in loss_batches.items()])
+        denom = len(win_batches) + len(loss_batches)
 
         l1_losses = 0
         mse_losses = 0
@@ -329,9 +328,9 @@ class Agent:
 
                 total_value += value.sum().item() / denom
 
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.grad_clip)
-            self.optimizer.step()
-            self.optimizer.zero_grad()
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.grad_clip*10)
+        self.optimizer.step()
+        self.optimizer.zero_grad()
 
         self.model.eval()
         return l1_loss_mean, mse_loss_mean, total_value
