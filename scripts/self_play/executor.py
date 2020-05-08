@@ -483,6 +483,21 @@ class Executor(nn.Module):
         model.load_state_dict(torch.load(model_file))
         return model
 
+    @classmethod
+    def rl_load(cls, model_file):
+        params = pickle.load(open(model_file + '.params', 'rb'))
+        arg_dict = params['args'].__dict__
+
+        ## Setting all dropouts to 0.0
+        for k, v in arg_dict.items():
+            if 'dropout' in k:
+                arg_dict[k] = 0.0
+
+        print(params)
+        model = cls(**params)
+        model.load_state_dict(torch.load(model_file))
+        return model
+
     def forward(self, batch):
         return self.compute_loss(batch, mean=False)
 
@@ -797,22 +812,23 @@ class Executor(nn.Module):
         }
         return probs
 
-    def compute_log_prob(self, batch, executor_reply):
-        log_probs = {}
-        log_prob_sum = 0
+def compute_log_prob(batch, executor_reply, ):
+    log_probs = {}
+    log_prob_sum = 0
 
-        for (name, prob) in executor_reply.items():
+    for (name, prob) in executor_reply.items():
 
-            cur_sample = batch["sample_" + name]
+        cur_sample = batch["sample_" + name]
 
-            if name == "glob_cont_prob":
-                prob_ = prob.gather(1, cur_sample.unsqueeze(1))
-            else:
-                prob_ = prob.gather(2, cur_sample.unsqueeze(2)).squeeze(2)
+        if name == "glob_cont_prob":
+            prob_ = prob.gather(1, cur_sample.unsqueeze(1))
+        else:
+            prob_ = prob.gather(2, cur_sample.unsqueeze(2)).squeeze(2)
 
-            log_prob = prob_.log()
-            log_probs["log_" + name] = log_prob.sum(1)
-            log_prob_sum += log_probs["log_" + name]
+        log_prob = prob_.log()
+
+        log_probs["log_" + name] = log_prob.sum(1)
+        log_prob_sum += log_probs["log_" + name]
 
 
-        return log_prob_sum, log_probs
+    return log_prob_sum, log_probs

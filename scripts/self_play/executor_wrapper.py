@@ -13,6 +13,7 @@ from common_utils import assert_eq, assert_lt
 from utils import convert_to_raw_instruction
 from instruction_encoder import is_word_based
 from common_utils.global_consts import *
+from executor import compute_log_prob
 
 CMD_TARGET_IDLE             = 0
 CMD_TARGET_GATHER           = 1
@@ -40,7 +41,8 @@ def construct_samples(executor_reply):
         onehot_reply[k] = one_hot
         sample_reply["sample_" + k] = Categorical(one_hot).sample()
 
-    return onehot_reply, sample_reply
+    pre_log_prob_sum, pre_log_probs = compute_log_prob(sample_reply, executor_reply)
+    return pre_log_prob_sum, pre_log_probs, onehot_reply, sample_reply
 
 class ExecutorWrapper(nn.Module):
     def __init__(self, coach, executor, num_insts, max_raw_chars, cheat, inst_mode):
@@ -108,7 +110,10 @@ class ExecutorWrapper(nn.Module):
         executor_reply = self.executor.compute_prob(executor_input)
 
         if exec_sample:
-            one_hot_reply, sample_reply = construct_samples(executor_reply)
+            pre_log_prob_sum, pre_log_probs, one_hot_reply, sample_reply = construct_samples(executor_reply)
+
+            batch['log_prob_sum'] = pre_log_prob_sum
+            batch.update(pre_log_probs)
             batch.update(one_hot_reply)
             batch.update(sample_reply)
 
@@ -123,9 +128,13 @@ class ExecutorWrapper(nn.Module):
         batch['e_inst_len'] = inst_len
         batch['e_inst_cont'] = inst_cont
 
+        ## Add coach old log probs for PPO
+        old_coach_log_probs = self.coach.sampler.get_log_prob(log_prob_reply['probs'], log_prob_reply['samples'])
+        batch['old_coach_log_probs'] = old_coach_log_probs.detach()
+
         return reply, log_prob_reply
 
-    def get_coach_rl_train_loss(self, batch):
+    def get_coach_vanilla_rl_train_loss(self, batch):
 
         assert self.coach.training
 
@@ -140,6 +149,23 @@ class ExecutorWrapper(nn.Module):
         loss = self.coach.sampler.get_log_prob(log_prob_reply['probs'], log_prob_reply['samples'])
 
         return loss, value
+
+    def get_coach_ppo_rl_train_loss(self, batch):
+
+        assert self.coach.training
+
+        coach_input = self.coach.format_coach_input(batch)
+        word_based = is_word_based(self.executor.args.inst_encoder_type)
+        inst, inst_len, inst_cont, coach_reply, log_prob_reply = self.coach.sample(
+            coach_input, self.inst_mode, word_based)
+
+        ## Get new policy log_probs
+        log_probs = self.coach.sampler.get_log_prob(log_prob_reply['probs'], log_prob_reply['samples'])
+        value = log_prob_reply['value']
+        old_log_probs = batch['old_coach_log_probs']
+        dist_entropy = Categorical(log_prob_reply['probs']['inst_pi']).entropy()
+
+        return log_probs, old_log_probs, dist_entropy, value
 
 
     #### Executor train forward ####
@@ -210,7 +236,7 @@ class ExecutorWrapper(nn.Module):
 
         return log_probs, masks
 
-    def get_executor_rl_train_loss(self, batch):
+    def get_executor_vanilla_rl_train_loss(self, batch):
         assert self.executor.training and self.coach.training
 
         coach_input = self.coach.format_coach_input(batch)
@@ -227,10 +253,38 @@ class ExecutorWrapper(nn.Module):
         executor_input = self.executor.format_rl_executor_input(
             batch, inst, inst_len, inst_cont)
         executor_reply = self.executor.compute_prob(executor_input)
-        log_prob_sum, all_log_probs = self.executor.compute_log_prob(batch, executor_reply)
+        log_prob_sum, all_log_probs = compute_log_prob(batch, executor_reply)
 
         # log_prob, all_losses = self.executor.compute_rl_log_probs(executor_input)
         value = log_prob_reply['value']
         #log_probs, masks = self.log_probs(batch, executor_reply)
 
         return log_prob_sum, all_log_probs, value
+
+    def get_executor_ppo_train_loss(self, batch):
+        assert self.executor.training and self.coach.training
+
+        coach_input = self.coach.format_coach_input(batch)
+        word_based = is_word_based(self.executor.args.inst_encoder_type)
+        _, _, _, _, log_prob_reply = self.coach.sample(
+            coach_input, self.inst_mode, word_based)
+
+
+        inst = batch['e_inst']
+        inst_len = batch['e_inst_len']
+        inst_cont = batch['e_inst_cont']
+
+        # assert not self.executor.training
+        executor_input = self.executor.format_rl_executor_input(
+            batch, inst, inst_len, inst_cont)
+        executor_reply = self.executor.compute_prob(executor_input)
+        log_prob_sum, all_log_probs = compute_log_prob(batch, executor_reply)
+
+        # log_prob, all_losses = self.executor.compute_rl_log_probs(executor_input)
+        value = log_prob_reply['value']
+        old_exec_log_probs = batch['log_prob_sum']
+        log_prob = log_prob_sum
+        entropy = 0
+        #log_probs, masks = self.log_probs(batch, executor_reply)
+
+        return log_prob, old_exec_log_probs, entropy, value

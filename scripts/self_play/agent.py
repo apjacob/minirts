@@ -32,7 +32,7 @@ reward_tuple = [("win", 1), ("loss", -1)]
 
 class Agent:
 
-    def __init__(self, coach, executor, device, args, writer, trainable=False, exec_sample=False):
+    def __init__(self, coach, executor, device, args, writer, trainable=False, exec_sample=False, pg="ppo"):
 
         self.__coach        = coach
         self.__executor     = executor
@@ -49,13 +49,16 @@ class Agent:
         self.model = self.load_model(self.__coach, self.__executor, self.args)
         self.exec_sample    = exec_sample
 
+        print("Using pg {} algorithm".format(args.pg))
         if self.__trainable:
-            self.optimizer = optim.Adam(self.model.coach.parameters(), lr=args.lr)
+            self.optimizer = optim.Adam(self.model.parameters(), lr=args.lr)
             self.sa_buffer = StateActionBuffer(max_buffer_size=args.max_table_size,
                                           buffer_add_prob=args.sampling_freq)
+            self.pg = pg
         else:
             self.optimizer = None
             self.sa_buffer = None
+            self.pg = None
 
     def clone(self, model_type='current'):
         if model_type == 'current':
@@ -72,9 +75,9 @@ class Agent:
         elif 'gen' in coach_path:
             coach = RnnGenerator.load(coach_path).to(self.device)
         else:
-            coach = ConvRnnCoach.load(coach_path).to(self.device)
+            coach = ConvRnnCoach.rl_load(coach_path).to(self.device)
         coach.max_raw_chars = args.max_raw_chars
-        executor = Executor.load(model_path).to(self.device)
+        executor = Executor.rl_load(model_path).to(self.device)
         executor_wrapper = ExecutorWrapper(
             coach, executor, coach.num_instructions, args.max_raw_chars, args.cheat, args.inst_mode)
         executor_wrapper.train(False)
@@ -134,10 +137,16 @@ class Agent:
     def train(self):
         self.model.train()
 
-    def eval_model(self, gen_id, other_agent):
+    def eval(self):
+        self.model.eval()
+
+    def eval_model(self, gen_id, other_agent, num_games=100):
         print("Evaluating model....")
-        e_result1, e_result2 = run_eval(self.args, self.model, other_agent.model, self.device)
+        e_result1, e_result2 = run_eval(self.args, self.model, other_agent.model, self.device, num_games)
         test_win_pct = e_result1.win / e_result1.num_games
+
+        print(e_result1.log(0))
+        print(e_result2.log(0))
 
         if self.tb_log:
             self.tb_writer.add_scalar('Test/Agent-1/Win', e_result1.win / e_result1.num_games, gen_id)
@@ -146,9 +155,13 @@ class Agent:
             self.tb_writer.add_scalar('Test/Eval_model/Win', e_result2.win / e_result2.num_games, gen_id)
             self.tb_writer.add_scalar('Test/Eval_model/Loss', e_result2.loss / e_result2.num_games, gen_id)
 
-        if test_win_pct > self.best_test_win_pct:
-            self.best_test_win_pct = test_win_pct
-            self.save_coach(gen_id)
+            ##TODO: Add executor save
+            if test_win_pct > self.best_test_win_pct:
+                self.best_test_win_pct = test_win_pct
+                self.save_coach(gen_id)
+                self.save_executor(gen_id)
+
+        return e_result1, e_result2
 
     def init_save_folder(self, log_name):
 
@@ -208,16 +221,26 @@ class Agent:
             # self.align_executor_actions(win_batches)
             # self.align_executor_actions(loss_batches)
 
-            l1_loss, mse_loss, value = self.__update_executor(win_batches, loss_batches)
+            if self.pg == "vanilla":
+                l1_loss, mse_loss, value = self.__update_executor_vanilla(win_batches, loss_batches)
 
-            if self.tb_log:
-                self.tb_writer.add_scalar('Loss/RL-Loss', l1_loss, gen_id)
-                self.tb_writer.add_scalar('Loss/MSE-Loss', mse_loss, gen_id)
-                self.tb_writer.add_scalar('Value', value, gen_id)
+                if self.tb_log:
+                    self.tb_writer.add_scalar('Loss/RL-Loss', l1_loss, gen_id)
+                    self.tb_writer.add_scalar('Loss/MSE-Loss', mse_loss, gen_id)
+                    self.tb_writer.add_scalar('Value', value, gen_id)
+            elif self.pg == "ppo":
+                action_loss, value_loss, entropy = self.__update_executor_ppo(win_batches, loss_batches)
+
+                if self.tb_log:
+                    self.tb_writer.add_scalar('Loss/Action-Loss', action_loss, gen_id)
+                    self.tb_writer.add_scalar('Loss/Value-Loss', value_loss, gen_id)
+                    self.tb_writer.add_scalar('Loss/Entropy', entropy, gen_id)
+            else:
+                raise NotImplementedError
         else:
             print("State-Action Buffer is empty.")
 
-    def __update_executor(self, win_batches, loss_batches):
+    def __update_executor_vanilla(self, win_batches, loss_batches):
         assert self.__trainable
 
         self.model.train()
@@ -243,7 +266,7 @@ class Agent:
 
                     sliced_batch = slice_batch(batch, s, e)
 
-                    log_prob, all_losses, value = self.model.get_executor_rl_train_loss(sliced_batch)
+                    log_prob, all_losses, value = self.model.get_executor_vanilla_rl_train_loss(sliced_batch)
                     l1 = r*log_prob #(r * torch.ones_like(value) - value.detach()) * log_prob
                     l2 = mse(value, r * torch.ones_like(value))
 
@@ -262,8 +285,65 @@ class Agent:
         self.optimizer.step()
         self.optimizer.zero_grad()
 
-        self.model.eval()
+        self.model.train()
         return l1_losses, mse_losses, total_values
+
+    def __update_executor_ppo(self, win_batches, loss_batches):
+        assert self.__trainable
+
+        self.model.train()
+        self.optimizer.zero_grad()
+
+        mse = torch.nn.MSELoss()
+
+        action_loss_mean = 0
+        value_loss_mean = 0
+        entropy_mean = 0
+        num_iters = 0
+
+        ##TODO: Add add discount factor
+
+        for epoch in range(self.args.ppo_epochs):
+
+            for (kind, r), batches in zip(reward_tuple, [win_batches, loss_batches]):
+
+                for game_id, batch in batches.items():
+                    episode_len = batch['reward'].size(0)
+                    intervals = list(range(0, episode_len, self.args.train_batch_size))
+                    interval_tuples_iter = zip(intervals, intervals[1:] + [episode_len])
+
+                    for (s, e) in interval_tuples_iter:
+                        sliced_batch = slice_batch(batch, s, e)
+                        log_prob, old_exec_log_probs, entropy, value = self.model.get_executor_ppo_train_loss(sliced_batch)
+                        adv = (r * torch.ones_like(value) - value.detach())
+
+                        ratio = torch.exp(log_prob - old_exec_log_probs)
+                        surr1 = ratio * adv
+                        surr2 = torch.clamp(ratio, 1.0 - self.args.ppo_eps,
+                                            1.0 + self.args.ppo_eps) * adv
+
+                        action_loss = -torch.min(surr1, surr2).mean()
+                        value_loss = 1.0*mse(value, r * torch.ones_like(value))
+                        entropy_loss = -1.0*entropy#.mean()
+
+                        self.optimizer.zero_grad()
+                        policy_loss = (action_loss + value_loss).mean()
+                        policy_loss.backward()
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(),
+                                                 0.5*self.args.grad_clip)
+                        self.optimizer.step()
+
+                        action_loss_mean += action_loss.item()
+                        value_loss_mean += value_loss.item()
+                        entropy_mean += entropy_loss#.item()
+                        num_iters += 1
+
+        action_loss_mean = action_loss_mean /num_iters
+        value_loss_mean = value_loss_mean / num_iters
+        entropy_mean = entropy_mean / num_iters
+
+        self.model.train()
+        return action_loss_mean, value_loss_mean, entropy_mean
 
     def save_executor(self, index):
         pass
@@ -283,16 +363,29 @@ class Agent:
 
         if len(self.sa_buffer):
             win_batches, loss_batches = self.sa_buffer.pop(self.result_dict)
-            l1_loss, mse_loss, value = self.__update_coach(win_batches, loss_batches)
 
-            if self.tb_log:
-                self.tb_writer.add_scalar('Loss/RL-Loss', l1_loss, gen_id)
-                self.tb_writer.add_scalar('Loss/MSE-Loss', mse_loss, gen_id)
-                self.tb_writer.add_scalar('Value', value, gen_id)
+            if self.pg == "vanilla":
+                l1_loss, mse_loss, value = self.__update_coach_vanilla(win_batches, loss_batches)
+
+                if self.tb_log:
+                    self.tb_writer.add_scalar('Loss/Action-Loss', l1_loss, gen_id)
+                    self.tb_writer.add_scalar('Loss/Value-Loss', mse_loss, gen_id)
+                    self.tb_writer.add_scalar('Loss/Entropy', value, gen_id)
+
+            elif self.pg == "ppo":
+                action_loss, value_loss, entropy = self.__update_coach_ppo(win_batches, loss_batches)
+
+                if self.tb_log:
+                    self.tb_writer.add_scalar('Loss/Action-Loss', action_loss, gen_id)
+                    self.tb_writer.add_scalar('Loss/Value-Loss', value_loss, gen_id)
+                    self.tb_writer.add_scalar('Loss/Entropy', entropy, gen_id)
+            else:
+                raise NotImplementedError
+
         else:
             print("State-Action Buffer is empty.")
 
-    def __update_coach(self, win_batches, loss_batches):
+    def __update_coach_vanilla(self, win_batches, loss_batches):
         assert self.__trainable
 
         self.model.train()
@@ -314,7 +407,7 @@ class Agent:
             #     denom = np.sum([y['inst'].size()[0] for x, y in loss_batches.items()])
 
             for game_id, batch in batches.items():
-                log_prob, value = self.model.get_coach_rl_train_loss(batch)
+                log_prob, value = self.model.get_coach_vanilla_rl_train_loss(batch)
                 l1 = (r * torch.ones_like(value) - value.detach()) * log_prob
                 l2 = mse(value, r * torch.ones_like(value))
 
@@ -332,8 +425,65 @@ class Agent:
         self.optimizer.step()
         self.optimizer.zero_grad()
 
-        self.model.eval()
+        self.model.train()
         return l1_loss_mean, mse_loss_mean, total_value
+
+    def __update_coach_ppo(self, win_batches, loss_batches):
+        assert self.__trainable
+
+        self.model.train()
+        self.optimizer.zero_grad()
+
+        mse = torch.nn.MSELoss()
+
+        action_loss_mean = 0
+        value_loss_mean = 0
+        entropy_mean = 0
+        num_iters = 0
+
+        ##TODO: Add add discount factor
+
+        for epoch in range(self.args.ppo_epochs):
+
+            for (kind, r), batches in zip(reward_tuple, [win_batches, loss_batches]):
+
+                for game_id, batch in batches.items():
+                    episode_len = batch['reward'].size(0)
+                    intervals = list(range(0, episode_len, self.args.train_batch_size))
+                    interval_tuples_iter = zip(intervals, intervals[1:] + [episode_len])
+
+                    for (s, e) in interval_tuples_iter:
+                        sliced_batch = slice_batch(batch, s, e)
+                        log_prob, old_coach_log_probs, entropy, value = self.model.get_coach_ppo_rl_train_loss(sliced_batch)
+                        adv = (r * torch.ones_like(value) - value.detach())
+
+                        ratio = torch.exp(log_prob - old_coach_log_probs)
+                        surr1 = ratio * adv
+                        surr2 = torch.clamp(ratio, 1.0 - self.args.ppo_eps,
+                                            1.0 + self.args.ppo_eps) * adv
+
+                        action_loss = -torch.min(surr1, surr2).mean()
+                        value_loss = 1.0*mse(value, r * torch.ones_like(value))
+                        entropy_loss = -1.0*entropy.mean()
+
+                        self.optimizer.zero_grad()
+                        policy_loss = (action_loss + value_loss + entropy_loss).mean()
+                        policy_loss.backward()
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(),
+                                                 0.5*self.args.grad_clip)
+                        self.optimizer.step()
+
+                        action_loss_mean += action_loss.item()
+                        value_loss_mean += value_loss.item()
+                        entropy_mean += entropy_loss.item()
+                        num_iters += 1
+
+        action_loss_mean = action_loss_mean /num_iters
+        value_loss_mean = value_loss_mean / num_iters
+        entropy_mean = entropy_mean / num_iters
+
+        self.model.train()
+        return action_loss_mean, value_loss_mean, entropy_mean
 
     def save_coach(self, index):
         assert self.save_folder is not None
@@ -342,10 +492,17 @@ class Agent:
         print('Saving model coach to: ', model_file)
         self.model.coach.save(model_file)
 
+    def save_exec(self, index):
+        assert self.save_folder is not None
 
-def run_eval(args, model1, model2, device):
+        model_file = os.path.join(self.save_folder, 'best_exec_checkpoint_%d.pt' % index)
+        print('Saving model exec to: ', model_file)
+        self.model.executor.save(model_file)
 
-    num_eval_games = 100
+
+def run_eval(args, model1, model2, device, num_games=100):
+
+    num_eval_games = num_games
     pbar = tqdm(total=num_eval_games * 2)
 
     result1 = ResultStat('reward', None)
@@ -382,7 +539,7 @@ def run_eval(args, model1, model2, device):
 
                 result1.feed(batch)
                 with torch.no_grad():
-                    reply, _ = model1.forward(batch, exec_sample=True)
+                    reply, _ = model1.forward(batch)#, exec_sample=True)
 
             elif key == 'act2':
                 batch['actor'] = 'act2'
@@ -403,8 +560,9 @@ def run_eval(args, model1, model2, device):
                 if terminals[i] == 1:
                     pbar.update(1)
 
-    model1.train()
-    model2.train()
+    model1.eval()
+    model2.eval()
+    pbar.close()
 
     return result1, result2
 

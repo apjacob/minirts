@@ -76,8 +76,13 @@ class ContSoftmaxSampler:
         """
         cont_probs = probs[self.cont_prob_key]
         probs_ = probs[self.prob_key]
-        cont_samples = samples[self.cont_key]#.float()
-        samples_ = samples[self.key]
+
+        if len(samples[self.cont_key].size()) == 1:
+            cont_samples = samples[self.cont_key].unsqueeze(1)  # .float()
+            samples_ = samples[self.key].unsqueeze(1)
+        else:
+            cont_samples = samples[self.cont_key]  # .float()
+            samples_ = samples[self.key]
 
         # assert_eq(cont_samples.size(1), 1)
         # assert_eq(samples_.size(1), 1)

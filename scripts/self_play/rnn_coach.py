@@ -79,6 +79,22 @@ class ConvRnnCoach(nn.Module):
         model.load_state_dict(torch.load(model_file))
         return model
 
+    @classmethod
+    def rl_load(cls, model_file):
+        params = pickle.load(open(model_file + '.params', 'rb'))
+        arg_dict = params['args'].__dict__
+
+        ## Setting all dropouts to 0.0
+        for k, v in arg_dict.items():
+            if 'dropout' in k:
+                arg_dict[k] = 0.0
+
+
+        print(params)
+        model = cls(**params)
+        model.load_state_dict(torch.load(model_file))
+        return model
+
     def load_inst_dict(self, inst_dict_path):
         print('loading cmd dict from: ', inst_dict_path)
         if inst_dict_path is None or inst_dict_path == '':
