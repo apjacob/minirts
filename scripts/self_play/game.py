@@ -31,6 +31,7 @@ from tqdm import tqdm
 from game_utils import *
 from agent import Agent
 reward_tuple = [("win", 1), ("loss", -1)]
+import wandb
 
 class Game:
     def __init__(self, sp_agent, bc_agent, index, args):
@@ -76,6 +77,11 @@ class Game:
         print(result2.log(0))
 
         if self.tb_log:
+            wandb.log({'Train/Agent-1/Win': result1.win / result1.num_games,
+                       'Train/Agent-1/Loss': result1.loss / result1.num_games,
+                       'Train/Agent-2/Win': result2.win / result2.num_games,
+                       'Train/Agent-2/Loss': result2.loss / result2.num_games}, step=index)
+
             self.agent1.tb_writer.add_scalar('Train/Agent-1/Win', result1.win / result1.num_games, index)
             self.agent1.tb_writer.add_scalar('Train/Agent-1/Loss', result1.loss / result1.num_games, index)
 

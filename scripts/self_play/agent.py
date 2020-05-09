@@ -26,6 +26,7 @@ from best_models import best_executors, best_coaches
 from tqdm import tqdm
 from game_utils import *
 import copy
+import wandb
 
 reward_tuple = [("win", 1), ("loss", -1)]
 
@@ -54,6 +55,7 @@ class Agent:
             self.optimizer = optim.Adam(self.model.parameters(), lr=args.lr)
             self.sa_buffer = StateActionBuffer(max_buffer_size=args.max_table_size,
                                           buffer_add_prob=args.sampling_freq)
+            wandb.watch(self.model)
             self.pg = pg
         else:
             self.optimizer = None
@@ -149,13 +151,17 @@ class Agent:
         print(e_result2.log(0))
 
         if self.tb_log:
+            wandb.log({'Test/Agent-1/Win': e_result1.win / e_result1.num_games,
+                       'Test/Agent-1/Loss': e_result1.loss / e_result1.num_games,
+                       'Test/Eval_model/Win': e_result2.win / e_result2.num_games,
+                       'Test/Eval_model/Loss': e_result2.loss / e_result2.num_games}, step=gen_id)
+
             self.tb_writer.add_scalar('Test/Agent-1/Win', e_result1.win / e_result1.num_games, gen_id)
             self.tb_writer.add_scalar('Test/Agent-1/Loss', e_result1.loss / e_result1.num_games, gen_id)
 
             self.tb_writer.add_scalar('Test/Eval_model/Win', e_result2.win / e_result2.num_games, gen_id)
             self.tb_writer.add_scalar('Test/Eval_model/Loss', e_result2.loss / e_result2.num_games, gen_id)
 
-            ##TODO: Add executor save
             if test_win_pct > self.best_test_win_pct:
                 self.best_test_win_pct = test_win_pct
                 self.save_coach(gen_id)
@@ -225,13 +231,21 @@ class Agent:
                 l1_loss, mse_loss, value = self.__update_executor_vanilla(win_batches, loss_batches)
 
                 if self.tb_log:
+                    wandb.log({'Loss/RL-Loss': l1_loss,
+                               'Loss/MSE-Loss': mse_loss,
+                               'Value': value}, step=gen_id)
                     self.tb_writer.add_scalar('Loss/RL-Loss', l1_loss, gen_id)
                     self.tb_writer.add_scalar('Loss/MSE-Loss', mse_loss, gen_id)
                     self.tb_writer.add_scalar('Value', value, gen_id)
+
             elif self.pg == "ppo":
                 action_loss, value_loss, entropy = self.__update_executor_ppo(win_batches, loss_batches)
 
                 if self.tb_log:
+                    wandb.log({'Loss/Action-Loss': action_loss,
+                               'Loss/Value-Loss': value_loss,
+                               'Loss/Entropy': entropy}, step=gen_id)
+
                     self.tb_writer.add_scalar('Loss/Action-Loss', action_loss, gen_id)
                     self.tb_writer.add_scalar('Loss/Value-Loss', value_loss, gen_id)
                     self.tb_writer.add_scalar('Loss/Entropy', entropy, gen_id)
@@ -346,13 +360,11 @@ class Agent:
         return action_loss_mean, value_loss_mean, entropy_mean
 
     def save_executor(self, index):
-        pass
-
         assert self.save_folder is not None
 
-        model_file = os.path.join(self.save_folder, 'best_coach_checkpoint_%d.pt' % index)
-        print('Saving model coach to: ', model_file)
-        self.model.coach.save(model_file)
+        model_file = os.path.join(self.save_folder, 'best_exec_checkpoint_%d.pt' % index)
+        print('Saving model exec to: ', model_file)
+        self.model.executor.save(model_file)
 
     ####################
     ## Coach specific ##
@@ -368,14 +380,22 @@ class Agent:
                 l1_loss, mse_loss, value = self.__update_coach_vanilla(win_batches, loss_batches)
 
                 if self.tb_log:
+                    wandb.log({'Loss/Action-Loss': l1_loss,
+                               'Loss/Value-Loss': mse_loss,
+                               'Loss/Value': value}, step=gen_id)
+
                     self.tb_writer.add_scalar('Loss/Action-Loss', l1_loss, gen_id)
                     self.tb_writer.add_scalar('Loss/Value-Loss', mse_loss, gen_id)
-                    self.tb_writer.add_scalar('Loss/Entropy', value, gen_id)
+                    self.tb_writer.add_scalar('Loss/Value', value, gen_id)
 
             elif self.pg == "ppo":
                 action_loss, value_loss, entropy = self.__update_coach_ppo(win_batches, loss_batches)
 
                 if self.tb_log:
+                    wandb.log({'Loss/Action-Loss': action_loss,
+                               'Loss/Value-Loss': value_loss,
+                               'Loss/Entropy': entropy}, step=gen_id)
+
                     self.tb_writer.add_scalar('Loss/Action-Loss', action_loss, gen_id)
                     self.tb_writer.add_scalar('Loss/Value-Loss', value_loss, gen_id)
                     self.tb_writer.add_scalar('Loss/Entropy', entropy, gen_id)
