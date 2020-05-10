@@ -119,6 +119,8 @@ PYBIND11_MODULE(minirts, m) {
            UnitType,
            bool>());
 
+  py::class_<StrongAI, AI, std::shared_ptr<StrongAI>>(m, "StrongAI").def(py::init<const AIOption&, int>());
+
   py::enum_<UnitType>(m, "UnitType", py::arithmetic())
       .value("INVALID_UNITTYPE", INVALID_UNITTYPE)
       .value("RESOURCE", RESOURCE)
