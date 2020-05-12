@@ -511,6 +511,8 @@ class Agent:
         model_file = os.path.join(self.save_folder, 'best_coach_checkpoint_%d.pt' % index)
         print('Saving model coach to: ', model_file)
         self.model.coach.save(model_file)
+        wandb.save('{}/*.pt'.format(self.save_folder))
+        wandb.save('{}/*.params'.format(self.save_folder))
 
     def save_exec(self, index):
         assert self.save_folder is not None
@@ -518,6 +520,8 @@ class Agent:
         model_file = os.path.join(self.save_folder, 'best_exec_checkpoint_%d.pt' % index)
         print('Saving model exec to: ', model_file)
         self.model.executor.save(model_file)
+        wandb.save('{}/*.pt'.format(self.save_folder))
+        wandb.save('{}/*.params'.format(self.save_folder))
 
 
 def run_eval(args, model1, model2, device, num_games=100):
