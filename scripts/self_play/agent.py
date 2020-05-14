@@ -142,7 +142,7 @@ class Agent:
     def eval(self):
         self.model.eval()
 
-    def eval_model(self, gen_id, other_agent, num_games=100):
+    def  eval_model(self, gen_id, other_agent, num_games=100):
         print("Evaluating model....")
         e_result1, e_result2 = run_eval(self.args, self.model, other_agent.model, self.device, num_games)
         test_win_pct = e_result1.win / e_result1.num_games
@@ -166,6 +166,8 @@ class Agent:
                 self.best_test_win_pct = test_win_pct
                 self.save_coach(gen_id)
                 self.save_executor(gen_id)
+                wandb.save('{}/*.pt'.format(self.save_folder))
+                wandb.save('{}/*.params'.format(self.save_folder))
 
         return e_result1, e_result2
 
@@ -366,6 +368,7 @@ class Agent:
         print('Saving model exec to: ', model_file)
         self.model.executor.save(model_file)
 
+
     ####################
     ## Coach specific ##
     ####################
@@ -511,17 +514,6 @@ class Agent:
         model_file = os.path.join(self.save_folder, 'best_coach_checkpoint_%d.pt' % index)
         print('Saving model coach to: ', model_file)
         self.model.coach.save(model_file)
-        wandb.save('{}/*.pt'.format(self.save_folder))
-        wandb.save('{}/*.params'.format(self.save_folder))
-
-    def save_exec(self, index):
-        assert self.save_folder is not None
-
-        model_file = os.path.join(self.save_folder, 'best_exec_checkpoint_%d.pt' % index)
-        print('Saving model exec to: ', model_file)
-        self.model.executor.save(model_file)
-        wandb.save('{}/*.pt'.format(self.save_folder))
-        wandb.save('{}/*.params'.format(self.save_folder))
 
 
 def run_eval(args, model1, model2, device, num_games=100):
