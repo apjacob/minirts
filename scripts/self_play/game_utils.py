@@ -46,15 +46,78 @@ def init_games(num_games, ai1_option, ai2_option, game_option, *, act_name='act'
         bot2 = minirts.CheatExecutorAI(ai2_option, 0, None, act2_dc)
         # utype = idx2utype[i % len(idx2utype)]
         # bot2 = minirts.MediumAI(ai2_option, 0, None, utype, False)
-        # p1dict[i] = []
-        # p2dict[i] = []
+
         g.add_bot(bot1)
         g.add_bot(bot2)
         context.push_env_thread(g)
 
     return context, act1_dc, act2_dc
 
-def get_game_option(args):
+def init_mt_games(num_sp, num_rb, args, ai1_option, ai2_option, game_option, *, act_name='act'):
+    # print('ai1 option:')
+    # print(ai1_option.info())
+    # print('ai2 option:')
+    # print(ai2_option.info())
+    # print('game option:')
+    # print(game_option.info())
+    total_games = num_sp + num_rb
+    batchsize = min(32, max(total_games // 2, 1))
+
+    act1_dc = tube.DataChannel(act_name+'1', batchsize, 1)
+    act2_dc = tube.DataChannel(act_name+'2', batchsize, 1)
+    context = tube.Context()
+    idx2utype = [
+        minirts.UnitType.SPEARMAN,
+        minirts.UnitType.SWORDMAN,
+        minirts.UnitType.CAVALRY,
+        minirts.UnitType.DRAGON,
+        minirts.UnitType.ARCHER,
+    ]
+
+    if game_option.seed == 777:
+        print("Using random seeds...")
+        seed = random.randint(1, 123456)
+    else:
+        seed = game_option.seed
+
+    game_id = 0
+    for i in range(num_rb):
+        bot1, g = create_game(act1_dc, ai1_option, game_option, game_id, seed)
+
+        rule_type = i % len(idx2utype)
+        utype = idx2utype[rule_type]
+        bot2 = minirts.MediumAI(ai2_option, 0, None, utype, 1) #Utype + tower
+
+        g.add_bot(bot1)
+        g.add_bot(bot2)
+        context.push_env_thread(g)
+        game_id+=1
+
+    for i in range(num_sp):
+        bot1, g = create_game(act1_dc, ai1_option, game_option, game_id, seed)
+        bot2 = minirts.CheatExecutorAI(ai2_option, 0, None, act2_dc)
+
+        g.add_bot(bot1)
+        g.add_bot(bot2)
+        context.push_env_thread(g)
+        game_id+=1
+
+    return context, act1_dc, act2_dc
+
+
+def create_game(act1_dc, ai1_option, game_option, i, seed):
+    g_option = minirts.RTSGameOption(game_option)
+    g_option.seed = seed + i
+    g_option.game_id = str(i)
+    if game_option.save_replay_prefix:
+        g_option.save_replay_prefix = game_option.save_replay_prefix + "_0_" + str(i)
+    g = minirts.RTSGame(g_option)
+    bot1 = minirts.CheatExecutorAI(ai1_option, 0, None, act1_dc)
+    return bot1, g
+
+
+def get_game_option(args, lua_files=None):
+
     game_option = minirts.RTSGameOption()
     game_option.seed = args.seed
     game_option.max_tick = args.max_tick
@@ -64,7 +127,12 @@ def get_game_option(args):
     game_option.fair = args.fair
     game_option.save_replay_freq = args.save_replay_freq
     game_option.save_replay_per_games = args.save_replay_per_games
-    game_option.lua_files = args.lua_files
+
+    if lua_files is None:
+        game_option.lua_files = args.lua_files
+    else:
+        game_option.lua_files = lua_files
+
     game_option.num_games_per_thread = args.game_per_thread
     # !!! this is important
     game_option.max_num_units_per_player = args.max_num_units

@@ -1,0 +1,90 @@
+swordman:
+  attack_multiplier: >
+    {{UnitType.PEASANT, 1.0},
+    {UnitType.SWORDMAN, 1.0},
+    {UnitType.SPEARMAN, 1.5},
+    {UnitType.CAVALRY, 0.5},
+    {UnitType.DRAGON, 0.0},
+    {UnitType.ARCHER, 1.0},
+    {UnitType.CATAPULT, 1.0},
+    {UnitType.TOWN_HALL, 1.0},
+    {UnitType.BARRACK, 1.0},
+    {UnitType.STABLE, 1.0},
+    {UnitType.BLACKSMITH, 1.0},
+    {UnitType.WORKSHOP, 1.0},
+    {UnitType.AVIARY, 1.0},
+    {UnitType.ARCHERY, 1.0},
+    {UnitType.GUARD_TOWER, 1.0},}
+
+spearman:
+  attack_multiplier: >
+    {{UnitType.PEASANT, 1.0},
+    {UnitType.SWORDMAN, 0.5},
+    {UnitType.SPEARMAN, 1.0},
+    {UnitType.CAVALRY, 1.5},
+    {UnitType.DRAGON, 0.0},
+    {UnitType.ARCHER, 1.0},
+    {UnitType.CATAPULT, 1.0},
+    {UnitType.TOWN_HALL, 1.0},
+    {UnitType.BARRACK, 1.0},
+    {UnitType.STABLE, 1.0},
+    {UnitType.BLACKSMITH, 1.0},
+    {UnitType.WORKSHOP, 1.0},
+    {UnitType.AVIARY, 1.0},
+    {UnitType.ARCHERY, 1.0},
+    {UnitType.GUARD_TOWER, 1.0},}
+
+cavalry:
+  attack_multiplier: >
+    {{UnitType.PEASANT, 1.0},
+    {UnitType.SWORDMAN, 1.5},
+    {UnitType.SPEARMAN, 0.5},
+    {UnitType.CAVALRY, 1.0},
+    {UnitType.DRAGON, 0.0},
+    {UnitType.ARCHER, 1.0},
+    {UnitType.CATAPULT, 1.0},
+    {UnitType.TOWN_HALL, 1.0},
+    {UnitType.BARRACK, 1.0},
+    {UnitType.STABLE, 1.0},
+    {UnitType.BLACKSMITH, 1.0},
+    {UnitType.WORKSHOP, 1.0},
+    {UnitType.AVIARY, 1.0},
+    {UnitType.ARCHERY, 1.0},
+    {UnitType.GUARD_TOWER, 1.0},}
+
+archer:
+  attack_multiplier: >
+    {{UnitType.PEASANT, 0.5},
+    {UnitType.SWORDMAN, 0.5},
+    {UnitType.SPEARMAN, 0.5},
+    {UnitType.CAVALRY, 0.5},
+    {UnitType.DRAGON, 2.0},
+    {UnitType.ARCHER, 0.5},
+    {UnitType.CATAPULT, 1.0},
+    {UnitType.TOWN_HALL, 1.0},
+    {UnitType.BARRACK, 1.0},
+    {UnitType.STABLE, 1.0},
+    {UnitType.BLACKSMITH, 1.0},
+    {UnitType.WORKSHOP, 1.0},
+    {UnitType.AVIARY, 1.0},
+    {UnitType.ARCHERY, 1.0},
+    {UnitType.GUARD_TOWER, 1.0},}
+
+dragon:
+  attack_multiplier: >
+    {{UnitType.PEASANT, 1.0},
+    {UnitType.SWORDMAN, 1.0},
+    {UnitType.SPEARMAN, 1.0},
+    {UnitType.CAVALRY, 1.0},
+    {UnitType.DRAGON, 1.0},
+    {UnitType.ARCHER, 0.5},
+    {UnitType.CATAPULT, 1.0},
+    {UnitType.TOWN_HALL, 1.0},
+    {UnitType.BARRACK, 1.0},
+    {UnitType.STABLE, 1.0},
+    {UnitType.BLACKSMITH, 1.0},
+    {UnitType.WORKSHOP, 1.0},
+    {UnitType.AVIARY, 1.0},
+    {UnitType.ARCHERY, 1.0},
+    {UnitType.GUARD_TOWER, 1.0},}
+

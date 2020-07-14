@@ -812,7 +812,7 @@ class Executor(nn.Module):
         }
         return probs
 
-def compute_log_prob(batch, executor_reply, ):
+def compute_log_prob(batch, executor_reply):
     log_probs = {}
     log_prob_sum = 0
 

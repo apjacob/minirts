@@ -25,6 +25,9 @@ for key, val in best_executors.items():
 
 coach_root = '/private/home/hengyuan/minirts/scripts/behavior_clone/new_sweep_coach/coach_repro1'
 best_coaches = {
+    'rnn_gen50': 'coach_rnn_gen50.pt',
+    'rnn_gen250': 'coach_rnn_gen250.ptt',
+    'rnn_gen500': 'coach_rnn_gen500.pt',
     'rnn50': 'coach_rnn50.pt',
     'rnn250': 'coach_rnn250.pt',
     'rnn500': 'coach_rnn500.pt',

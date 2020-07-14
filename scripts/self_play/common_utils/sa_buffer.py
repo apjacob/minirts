@@ -33,6 +33,23 @@ class StateActionBuffer:
 
         return win_batch_dict, loss_batch_dict
 
+    def get(self, wl_dict):
+
+        win_batch_dict = defaultdict(dict)
+        loss_batch_dict = defaultdict(dict)
+
+        for (g_id, r) in wl_dict.items():
+
+            if g_id in self.__batch_buffer_dict:
+                if r == 1:
+                    win_batch_dict[g_id] = self.__batch_buffer_dict[g_id]
+                else:
+                    loss_batch_dict[g_id] = self.__batch_buffer_dict[g_id]
+            else:
+                print("Game {} missing from batch buffer".format(g_id))
+
+        return win_batch_dict, loss_batch_dict
+
     def push(self, gen_id, sr_dict):
         """
         :param gen_id: Generation of the current batch

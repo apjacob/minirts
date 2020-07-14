@@ -55,7 +55,7 @@ class Agent:
             self.optimizer = optim.Adam(self.model.parameters(), lr=args.lr)
             self.sa_buffer = StateActionBuffer(max_buffer_size=args.max_table_size,
                                           buffer_add_prob=args.sampling_freq)
-            wandb.watch(self.model)
+            #wandb.watch(self.model)
             self.pg = pg
         else:
             self.optimizer = None
@@ -89,7 +89,7 @@ class Agent:
         with torch.no_grad():
             reply, coach_reply = self.model.forward(batch, self.exec_sample)
 
-            if self.__trainable:
+            if self.__trainable and self.model.training:
                 assert self.sa_buffer is not None
 
                 ## Add coach reply to state-reply dict
@@ -99,9 +99,11 @@ class Agent:
             return reply
 
     def reset(self):
-        if self.__trainable:
+        if self.__trainable and self.model.training:
             assert len(self.sa_buffer) == 0
-
+        else:
+            self.sa_buffer = StateActionBuffer(max_buffer_size=self.args.max_table_size,
+                                               buffer_add_prob=self.args.sampling_freq)
 
         self.result        = ResultStat('reward', None)
         self.traj_dict     = defaultdict(list)
@@ -142,7 +144,7 @@ class Agent:
     def eval(self):
         self.model.eval()
 
-    def  eval_model(self, gen_id, other_agent, num_games=100):
+    def eval_model(self, gen_id, other_agent, num_games=100):
         print("Evaluating model....")
         e_result1, e_result2 = run_eval(self.args, self.model, other_agent.model, self.device, num_games)
         test_win_pct = e_result1.win / e_result1.num_games
@@ -151,23 +153,33 @@ class Agent:
         print(e_result2.log(0))
 
         if self.tb_log:
-            wandb.log({'Test/Agent-1/Win': e_result1.win / e_result1.num_games,
-                       'Test/Agent-1/Loss': e_result1.loss / e_result1.num_games,
-                       'Test/Eval_model/Win': e_result2.win / e_result2.num_games,
-                       'Test/Eval_model/Loss': e_result2.loss / e_result2.num_games}, step=gen_id)
+            a1_win = e_result1.win / e_result1.num_games
+            a1_loss = e_result1.loss / e_result1.num_games
 
-            self.tb_writer.add_scalar('Test/Agent-1/Win', e_result1.win / e_result1.num_games, gen_id)
-            self.tb_writer.add_scalar('Test/Agent-1/Loss', e_result1.loss / e_result1.num_games, gen_id)
+            if self.args.opponent == "rb":
+                a2_win = e_result1.loss / e_result1.num_games
+                a2_loss = e_result1.win / e_result1.num_games
+            else:
+                a2_win = e_result2.win / e_result2.num_games
+                a2_loss = e_result2.loss / e_result2.num_games
 
-            self.tb_writer.add_scalar('Test/Eval_model/Win', e_result2.win / e_result2.num_games, gen_id)
-            self.tb_writer.add_scalar('Test/Eval_model/Loss', e_result2.loss / e_result2.num_games, gen_id)
+            wandb.log({'Test/Agent-1/Win': a1_win,
+                       'Test/Agent-1/Loss':a1_loss,
+                       'Test/Eval_model/Win': a2_win,
+                       'Test/Eval_model/Loss': a2_loss}, step=gen_id)
+
+            self.tb_writer.add_scalar('Test/Agent-1/Win', a1_win, gen_id)
+            self.tb_writer.add_scalar('Test/Agent-1/Loss', a1_loss, gen_id)
+
+            self.tb_writer.add_scalar('Test/Eval_model/Win', a2_win, gen_id)
+            self.tb_writer.add_scalar('Test/Eval_model/Loss', a2_loss, gen_id)
 
             if test_win_pct > self.best_test_win_pct:
                 self.best_test_win_pct = test_win_pct
                 self.save_coach(gen_id)
                 self.save_executor(gen_id)
-                wandb.save('{}/*.pt'.format(self.save_folder))
-                wandb.save('{}/*.params'.format(self.save_folder))
+                # wandb.save('{}/*.pt'.format(self.save_folder))
+                # wandb.save('{}/*.params'.format(self.save_folder))
 
         return e_result1, e_result2
 
@@ -181,6 +193,7 @@ class Agent:
             pdb.set_trace()
 
         os.makedirs(self.save_folder)
+
 
     #######################
     ## Executor specific ##
@@ -367,6 +380,8 @@ class Agent:
         model_file = os.path.join(self.save_folder, 'best_exec_checkpoint_%d.pt' % index)
         print('Saving model exec to: ', model_file)
         self.model.executor.save(model_file)
+        wandb.save(model_file)
+        wandb.save(model_file + ".params")
 
 
     ####################
@@ -444,9 +459,9 @@ class Agent:
 
                 total_value += value.sum().item() / denom
 
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.grad_clip*10)
-        self.optimizer.step()
-        self.optimizer.zero_grad()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.grad_clip*10)
+            self.optimizer.step()
+            self.optimizer.zero_grad()
 
         self.model.train()
         return l1_loss_mean, mse_loss_mean, total_value
@@ -487,10 +502,10 @@ class Agent:
 
                         action_loss = -torch.min(surr1, surr2).mean()
                         value_loss = 1.0*mse(value, r * torch.ones_like(value))
-                        entropy_loss = -1.0*entropy.mean()
+                        entropy_loss = 0.0#-0.001*entropy.mean()
 
                         self.optimizer.zero_grad()
-                        policy_loss = (action_loss + value_loss + entropy_loss).mean()
+                        policy_loss = (action_loss + value_loss).mean() #+ entropy_loss).mean()
                         policy_loss.backward()
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(),
                                                  0.5*self.args.grad_clip)
@@ -498,7 +513,7 @@ class Agent:
 
                         action_loss_mean += action_loss.item()
                         value_loss_mean += value_loss.item()
-                        entropy_mean += entropy_loss.item()
+                        entropy_mean += 0#entropy_loss.item()
                         num_iters += 1
 
         action_loss_mean = action_loss_mean /num_iters
@@ -514,12 +529,156 @@ class Agent:
         model_file = os.path.join(self.save_folder, 'best_coach_checkpoint_%d.pt' % index)
         print('Saving model coach to: ', model_file)
         self.model.coach.save(model_file)
+        wandb.save(model_file)
+        wandb.save(model_file + ".params")
+
+
+    ## Dual RL Training
+    def train_both(self, gen_id):
+        assert self.__trainable
+        assert self.args.sampling_freq >= 1.0
+
+        if len(self.sa_buffer):
+
+            win_batches, loss_batches = self.sa_buffer.pop(self.result_dict)
+            # self.align_executor_actions(win_batches)
+            # self.align_executor_actions(loss_batches)
+
+            if self.pg == "vanilla":
+                l1_loss, mse_loss, value = self.__update_both_vanilla(win_batches, loss_batches)
+
+                if self.tb_log:
+                    wandb.log({'Loss/RL-Loss': l1_loss,
+                               'Loss/MSE-Loss': mse_loss,
+                               'Value': value}, step=gen_id)
+                    self.tb_writer.add_scalar('Loss/RL-Loss', l1_loss, gen_id)
+                    self.tb_writer.add_scalar('Loss/MSE-Loss', mse_loss, gen_id)
+                    self.tb_writer.add_scalar('Value', value, gen_id)
+
+            elif self.pg == "ppo":
+                action_loss, value_loss, entropy = self.__update_both_ppo(win_batches, loss_batches)
+
+                if self.tb_log:
+                    wandb.log({'Loss/Action-Loss': action_loss,
+                               'Loss/Value-Loss': value_loss,
+                               'Loss/Entropy': entropy}, step=gen_id)
+
+                    self.tb_writer.add_scalar('Loss/Action-Loss', action_loss, gen_id)
+                    self.tb_writer.add_scalar('Loss/Value-Loss', value_loss, gen_id)
+                    self.tb_writer.add_scalar('Loss/Entropy', entropy, gen_id)
+            else:
+                raise NotImplementedError
+        else:
+            print("State-Action Buffer is empty.")
+
+    def __update_both_vanilla(self, win_batches, loss_batches):
+        raise NotImplementedError
+        assert self.__trainable
+
+        self.model.train()
+        self.optimizer.zero_grad()
+
+        mse = torch.nn.MSELoss(reduction='none')
+
+        denom = np.sum([y['inst'].size()[0] for x, y in win_batches.items()]) + \
+                np.sum([y['inst'].size()[0] for x, y in loss_batches.items()])
+
+        l1_loss_mean = 0
+        mse_loss_mean = 0
+
+        total_value = 0
+        for (kind, r), batches in zip(reward_tuple, [win_batches, loss_batches]):
+            # if kind == "win":
+            #     denom = np.sum([y['inst'].size()[0] for x, y in win_batches.items()])
+            # else:
+            #     denom = np.sum([y['inst'].size()[0] for x, y in loss_batches.items()])
+
+            for game_id, batch in batches.items():
+                log_prob, value = self.model.get_coach_vanilla_rl_train_loss(batch)
+                l1 = (r * torch.ones_like(value) - value.detach()) * log_prob
+                l2 = mse(value, r * torch.ones_like(value))
+
+                l1_mean = -1.0 * (l1.sum()) / denom
+                mse_loss = 0.1 * (l2.sum()) / denom
+                policy_loss = l1_mean + mse_loss
+
+                policy_loss.backward()
+                l1_loss_mean += l1_mean.item()
+                mse_loss_mean += mse_loss.item()
+
+                total_value += value.sum().item() / denom
+
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.grad_clip*10)
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+
+        self.model.train()
+        return l1_loss_mean, mse_loss_mean, total_value
+
+    def __update_both_ppo(self, win_batches, loss_batches):
+        assert self.__trainable
+
+        self.model.train()
+        self.optimizer.zero_grad()
+
+        mse = torch.nn.MSELoss()
+
+        action_loss_mean = 0
+        value_loss_mean = 0
+        entropy_mean = 0
+        num_iters = 0
+
+        ##TODO: Add add discount factor
+
+        for epoch in range(self.args.ppo_epochs):
+
+            for (kind, r), batches in zip(reward_tuple, [win_batches, loss_batches]):
+
+                for game_id, batch in batches.items():
+                    episode_len = batch['reward'].size(0)
+                    intervals = list(range(0, episode_len, self.args.train_batch_size))
+                    interval_tuples_iter = zip(intervals, intervals[1:] + [episode_len])
+
+                    for (s, e) in interval_tuples_iter:
+                        sliced_batch = slice_batch(batch, s, e)
+                        c_log_prob, old_coach_log_probs, c_entropy, value = self.model.get_coach_ppo_rl_train_loss(sliced_batch)
+                        e_log_prob, old_exec_log_probs, e_entropy, value = self.model.get_executor_ppo_train_loss(sliced_batch)
+
+                        log_prob = c_log_prob + e_log_prob
+                        old_log_prob = old_coach_log_probs + old_exec_log_probs
+                        adv = (r * torch.ones_like(value) - value.detach())
+                        ratio = torch.exp(log_prob - old_log_prob)
+                        surr1 = ratio*adv
+                        surr2 = torch.clamp(ratio, 1.0 - self.args.ppo_eps,
+                                            1.0 + self.args.ppo_eps) * adv
+                        action_loss = -torch.min(surr1, surr2).mean()
+                        value_loss = 1.0*mse(value, r * torch.ones_like(value))
+                        entropy_loss = 0.0#-0.001*entropy.mean()
+
+                        self.optimizer.zero_grad()
+                        policy_loss = (action_loss + value_loss).mean() #+ entropy_loss).mean()
+                        policy_loss.backward()
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(),
+                                                 0.5*self.args.grad_clip)
+                        self.optimizer.step()
+
+                        action_loss_mean += action_loss.item()
+                        value_loss_mean += value_loss.item()
+                        entropy_mean += 0#entropy_loss.item()
+                        num_iters += 1
+
+        action_loss_mean = action_loss_mean /num_iters
+        value_loss_mean = value_loss_mean / num_iters
+        entropy_mean = entropy_mean / num_iters
+
+        self.model.train()
+        return action_loss_mean, value_loss_mean, entropy_mean
 
 
 def run_eval(args, model1, model2, device, num_games=100):
 
     num_eval_games = num_games
-    pbar = tqdm(total=num_eval_games * 2)
+
 
     result1 = ResultStat('reward', None)
     result2 = ResultStat('reward', None)
@@ -528,8 +687,18 @@ def run_eval(args, model1, model2, device, num_games=100):
     ai1_option, ai2_option = get_ai_options(
         args, [model1.coach.num_instructions, model2.coach.num_instructions])
 
-    context, act1_dc, act2_dc = init_games(
-        num_eval_games, ai1_option, ai2_option, game_option)
+    if args.opponent == "sp":
+        context, act1_dc, act2_dc = init_mt_games(num_eval_games, 0, args, ai1_option,
+                                                                 ai2_option,
+                                                                 game_option)
+        pbar = tqdm(total=num_eval_games * 2)
+    else:
+        context, act1_dc, act2_dc = init_mt_games(0, num_eval_games, args, ai1_option,
+                                                                 ai2_option,
+                                                                 game_option)
+        pbar = tqdm(total=num_eval_games)
+    # context, act1_dc, act2_dc = init_games(
+    #     num_eval_games, ai1_option, ai2_option, game_option)
     context.start()
     dc = DataChannelManager([act1_dc, act2_dc])
 

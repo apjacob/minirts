@@ -160,6 +160,7 @@ class ExecutorWrapper(nn.Module):
             coach_input, self.inst_mode, word_based)
 
         ## Get new policy log_probs
+        log_prob_reply['samples'] = {'inst': batch['inst'], 'cont': batch['cont']}
         log_probs = self.coach.sampler.get_log_prob(log_prob_reply['probs'], log_prob_reply['samples'])
         value = log_prob_reply['value']
         old_log_probs = batch['old_coach_log_probs']

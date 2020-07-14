@@ -11,13 +11,13 @@ import sys
 def append_sys_path():
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    tube = os.path.join(root, 'build', 'tube')
-    if tube not in sys.path:
-        sys.path.append(tube)
-
     pytube = os.path.join(root, 'tube')
     if pytube not in sys.path:
         sys.path.append(pytube)
+
+    tube = os.path.join(root, 'build', 'tube')
+    if tube not in sys.path:
+        sys.path.append(tube)
 
     minirts = os.path.join(root, 'build', 'game')
     if minirts not in sys.path:
@@ -27,11 +27,10 @@ def append_sys_path():
     if script not in sys.path:
         sys.path.append(script)
 
-
 if __name__ == '__main__':
     # import env for testing
+    #import torch
     append_sys_path()
-    import torch
     import tube
     import pytube
     import minirts

@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 #
 from common_utils import assert_eq
+import sys, traceback, pdb
 import torch
 
 class ContSoftmaxSampler:
@@ -87,7 +88,14 @@ class ContSoftmaxSampler:
         # assert_eq(cont_samples.size(1), 1)
         # assert_eq(samples_.size(1), 1)
 
-        prob = probs_.gather(1, samples_).squeeze(1)
+        try:
+            prob = probs_.gather(1, samples_)
+            prob = prob.squeeze(1)
+        except:
+            extype, value, tb = sys.exc_info()
+            traceback.print_exc()
+            pdb.post_mortem(tb)
+
         # cont_prob = cont_probs.gather(1, cont_samples.unsqueeze(1)).squeeze(1)
         cont_samples = cont_samples.float()
         final_prob = (cont_samples.squeeze(1) * cont_probs[:, 1]
