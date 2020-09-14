@@ -137,6 +137,7 @@ class RnnSelector(nn.Module):
         """
         logit = self._forward(inst, inst_len, context)
         logit = logit
+
         # logit: [batch, num_inst]
         if log:
             return nn.functional.log_softmax(logit, 1)

@@ -23,6 +23,9 @@ from tqdm import tqdm
 import os
 import shutil
 
+UNITS = ['swordman', 'spearman', 'cavalry', 'archer', 'dragon']
+UNIT_DICT = {unit: i for i, unit in enumerate(UNITS)}
+
 class Game:
     def __init__(self, sp_agent, bc_agent, index, args):
         self.sp_agent = sp_agent

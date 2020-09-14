@@ -55,7 +55,14 @@ class ContSoftmaxSampler:
         new_samples = probs.multinomial(1).squeeze(1)
 
         assert_eq(prev_samples.size(), new_samples.size())
-        samples = cont_samples * prev_samples + (1 - cont_samples) * new_samples
+
+        # What a crazy bug...
+        if -1 in prev_samples:
+            samples = new_samples
+            cont_samples = cont_samples*0
+        else:
+            samples = cont_samples * prev_samples + (1 - cont_samples) * new_samples
+
         return {
             self.cont_key: cont_samples,
             self.key: samples,
@@ -89,6 +96,7 @@ class ContSoftmaxSampler:
         # assert_eq(samples_.size(1), 1)
 
         try:
+            print(samples_)
             prob = probs_.gather(1, samples_)
             prob = prob.squeeze(1)
         except:

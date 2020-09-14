@@ -24,6 +24,7 @@ from conv_glob_encoder import ConvGlobEncoder
 
 from cont_softmax_sampler import ContSoftmaxSampler
 
+NUM_UNIT_TYPES = 5
 
 def parse_batch_inst(inst_dict, indices, device):
     inst = []
@@ -80,7 +81,7 @@ class ConvRnnCoach(nn.Module):
         return model
 
     @classmethod
-    def rl_load(cls, model_file):
+    def rl_load(cls, model_file, rule_emb_size=0):
         params = pickle.load(open(model_file + '.params', 'rb'))
         arg_dict = params['args'].__dict__
 
@@ -89,10 +90,20 @@ class ConvRnnCoach(nn.Module):
             if 'dropout' in k:
                 arg_dict[k] = 0.0
 
-
+        params["rule_emb_size"] = rule_emb_size
         print(params)
         model = cls(**params)
-        model.load_state_dict(torch.load(model_file))
+        model_dict = torch.load(model_file)
+        strict = True
+
+        if rule_emb_size > 0:
+            filter_params = ["cont_cls", "inst_selector", "value"]
+            strict = False
+            for key in model_dict.copy().keys():
+                if key.startswith(tuple(filter_params)):
+                    del model_dict[key]
+
+        model.load_state_dict(model_dict, strict = strict)
         return model
 
     def load_inst_dict(self, inst_dict_path):
@@ -112,7 +123,8 @@ class ConvRnnCoach(nn.Module):
                  num_resource_bin,
                  *,
                  num_unit_type=len(gc.UnitTypes),
-                 num_cmd_type=len(gc.CmdTypes)):
+                 num_cmd_type=len(gc.CmdTypes),
+                 rule_emb_size=0):
         super().__init__()
 
         self.params = {
@@ -124,6 +136,9 @@ class ConvRnnCoach(nn.Module):
             'num_unit_type': num_unit_type,
             'num_cmd_type': num_cmd_type,
         }
+
+        self.num_unit_types = NUM_UNIT_TYPES
+        self.rule_emb_size = rule_emb_size
 
         self.args = args
         self.max_raw_chars = max_raw_chars
@@ -185,12 +200,19 @@ class ConvRnnCoach(nn.Module):
         self.glob_feat_dim = int(
             2.5 * self.args.count_hid_dim
             + self.glob_encoder.glob_dim
+            + self.rule_emb_size
         )
         self.cont_cls = GlobClsHead(
             self.glob_feat_dim,
             self.args.inst_hid_dim,  # for reducing hyper-parameter
             2
         )
+
+        if self.rule_emb_size > 0:
+            # TODO: Remove num units hardcoding
+            self.rule_emb = nn.Embedding(NUM_UNIT_TYPES, self.rule_emb_size)
+            self.rule_lstm = torch.nn.LSTM(self.rule_emb_size, self.rule_emb_size, batch_first=True)
+
 
         if self.coach_mode == 'rnn':
             encoder = self.prev_inst_encoder
@@ -245,6 +267,14 @@ class ConvRnnCoach(nn.Module):
             moving_avg_feat,
             frame_passed_feat,
         ], dim=1)
+
+
+        if "rule_tensor" in batch:
+            assert self.rule_emb_size > 0
+            rule_emb = self.rule_emb(batch['rule_tensor'])
+            _, (rule_feat, _) = self.rule_lstm(rule_emb)
+            glob_feat = torch.cat([glob_feat, rule_feat.view(glob_feat.size(0), -1)], dim=1)
+
 
         if self.args.glob_dropout > 0:
             glob_feat = self.glob_dropout(glob_feat)
@@ -371,6 +401,10 @@ class ConvRnnCoach(nn.Module):
             'cons_count': batch[prefix+'cons_count'],
             'moving_enemy_count': batch[prefix+'moving_enemy_count'],
         }
+
+        if "rule_tensor" in batch:
+            data['rule_tensor'] = batch['rule_tensor']
+
         # print(data['count'])
         # print(data['cons_count'])
         extra_data = self.glob_encoder.format_input(batch, prefix)
@@ -454,6 +488,9 @@ class ConvRnnCoach(nn.Module):
                   self.sampler.prob_key: output['inst_pi']},
         'value': output['v']
         }
+
+        if -1 in samples:
+            pass
 
         reply = {
             'cont': samples['cont'].unsqueeze(1),
