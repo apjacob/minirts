@@ -193,6 +193,7 @@ class MultiTaskGame(Game):
         return self.working_rule_dir
 
     def evaluate(self, epoch, split='valid', num_rules=5):
+        print("Validating...")
         device = torch.device('cuda:%d' % self.args.gpu)
         num_games = 100
 
@@ -210,6 +211,8 @@ class MultiTaskGame(Game):
         for rule_idx in range(num_rules): ##TODO: Not randomized
             rule = permute[rule_idx]
             self.init_rule_games(rule, num_sp=0, num_rb=num_games)
+            print(f"Validating on rule ({rule_idx}): {rule}")
+
             agent1, agent2  = self.start()
 
             agent1.eval()
@@ -226,6 +229,10 @@ class MultiTaskGame(Game):
                 for key in data:
                     # print(key)
                     batch = to_device(data[key], device)
+
+                    rule_tensor = torch.tensor([UNIT_DICT[unit] for unit in rule]).to(device) \
+                        .repeat(batch["game_id"].size(0), 1)
+                    batch["rule_tensor"] = rule_tensor
 
                     if key == 'act1':
                         batch['actor'] = 'act1'
@@ -254,8 +261,8 @@ class MultiTaskGame(Game):
 
         avg_win_rate = 0
         for rule, wl in results.items():
-            wandb.log({"{}/{}/Win".format(split, rule): wl["win"],
-                       "{}/{}/Loss".format(split, rule): wl["loss"]}, step=epoch)
+            wandb.log({"Zero/{}/{}/Win".format(split, rule): wl["win"],
+                       "Zero/{}/{}/Loss".format(split, rule): wl["loss"]}, step=epoch)
             avg_win_rate += wl["win"]/num_rules
 
         print("Average win rate: {}".format(avg_win_rate))

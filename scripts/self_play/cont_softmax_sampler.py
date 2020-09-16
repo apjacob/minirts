@@ -96,7 +96,6 @@ class ContSoftmaxSampler:
         # assert_eq(samples_.size(1), 1)
 
         try:
-            print(samples_)
             prob = probs_.gather(1, samples_)
             prob = prob.squeeze(1)
         except:

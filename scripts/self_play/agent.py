@@ -73,15 +73,17 @@ class Agent:
         return cpy
     def load_model(self, coach_path, model_path, args):
 
-        rule_emb_size = getattr(args, "rule_emb_size", 0)
+        coach_rule_emb_size = getattr(args, "coach_rule_emb_size", 0)
+        executor_rule_emb_size = getattr(args, "executor_rule_emb_size", 0)
+
         if 'onehot' in coach_path:
             coach = ConvOneHotCoach.load(coach_path).to(self.device)
         elif 'gen' in coach_path:
             coach = RnnGenerator.load(coach_path).to(self.device)
         else:
-            coach = ConvRnnCoach.rl_load(coach_path, rule_emb_size).to(self.device)
+            coach = ConvRnnCoach.rl_load(coach_path, coach_rule_emb_size).to(self.device)
         coach.max_raw_chars = args.max_raw_chars
-        executor = Executor.rl_load(model_path).to(self.device)
+        executor = Executor.rl_load(model_path, executor_rule_emb_size).to(self.device)
         executor_wrapper = ExecutorWrapper(
             coach, executor, coach.num_instructions, args.max_raw_chars, args.cheat, args.inst_mode)
         executor_wrapper.train(False)

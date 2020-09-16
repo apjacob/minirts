@@ -17,6 +17,7 @@ from rnn_coach import parse_batch_inst
 from common_utils import assert_eq, assert_lt
 import common_utils.global_consts as gc
 
+NUM_UNIT_TYPES = 5
 
 def parse_hist_inst(inst_dict, hist_inst, hist_inst_diff, inst, inst_len, inst_cont, word_based):
     device = hist_inst.device
@@ -206,7 +207,8 @@ class Executor(nn.Module):
                  num_unit_type=len(gc.UnitTypes),
                  num_cmd_type=len(gc.CmdTypes),
                  x_size=gc.MAP_X,
-                 y_size=gc.MAP_Y):
+                 y_size=gc.MAP_Y,
+                 executor_rule_emb_size=0):
         super().__init__()
 
         self.params = {
@@ -219,6 +221,7 @@ class Executor(nn.Module):
         }
         self.args = args
         self.num_cmd_type = num_cmd_type
+        self.executor_rule_emb_size = executor_rule_emb_size
 
         self.inst_dict = self._load_inst_dict(self.args.inst_dict_path)
         self.inst_encoder = self._create_inst_encoder()
@@ -237,42 +240,42 @@ class Executor(nn.Module):
         # self.args.cmd_head_dropout = 0.0
         self.target_emb_dim = self.conv_encoder.args.other_out_dim
 
+        if self.executor_rule_emb_size > 0:
+            # TODO: Remove num units hardcoding
+            self.rule_emb = nn.Embedding(NUM_UNIT_TYPES, self.executor_rule_emb_size)
+            self.rule_lstm = torch.nn.LSTM(self.executor_rule_emb_size, self.executor_rule_emb_size, batch_first=True)
+            self.rule_out = nn.Sequential(nn.Linear(self.executor_rule_emb_size, self.conv_encoder.army_dim + self.conv_encoder.inst_dim))
+
         # classifiers
         self.glob_cont_cls = GlobClsHead(
             self.conv_encoder.glob_dim,
             self.target_emb_dim,
-            2,
-        )
+            2)
 
         self.cmd_type_cls = CmdTypeHead(
             self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
             self.conv_encoder.glob_dim - self.conv_encoder.inst_dim,
             self.target_emb_dim,
-            num_cmd_type,
-        )
+            num_cmd_type)
         self.gather_cls = DotGatherHead(
             self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
             self.conv_encoder.resource_dim,
-            0
-        )
+            0)
         self.attack_cls = DotAttackHead(
             self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
             self.conv_encoder.enemy_dim,
-            0
-        )
+            0)
         self.move_cls = DotMoveHead(
             self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
             self.conv_encoder.map_dim,
             0,
             x_size,
-            y_size
-        )
+            y_size)
         self.build_unit_cls = BuildUnitHead(
             self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
             0,
             self.target_emb_dim,
-            num_unit_type,
-        )
+            num_unit_type)
         self.build_building_cls = DotBuildBuildingHead(
             self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
             self.conv_encoder.map_dim,
@@ -280,8 +283,7 @@ class Executor(nn.Module):
             self.target_emb_dim,
             num_unit_type,
             x_size,
-            y_size,
-        )
+            y_size)
 
     def format_executor_input(self, batch, inst, inst_len, inst_cont):
         """convert batch (in c++ format) to input used by executor
@@ -371,6 +373,10 @@ class Executor(nn.Module):
             'current_cmds': current_cmds,
             'map': batch['map'],
         }
+
+        if self.executor_rule_emb_size > 0:
+            data['rule_tensor'] = batch['rule_tensor']
+
         return data
 
     def format_rl_executor_input(self, batch, inst, inst_len, inst_cont):
@@ -484,7 +490,7 @@ class Executor(nn.Module):
         return model
 
     @classmethod
-    def rl_load(cls, model_file):
+    def rl_load(cls, model_file, executor_rule_emb_size=0):
         params = pickle.load(open(model_file + '.params', 'rb'))
         arg_dict = params['args'].__dict__
 
@@ -493,9 +499,18 @@ class Executor(nn.Module):
             if 'dropout' in k:
                 arg_dict[k] = 0.0
 
+        params["executor_rule_emb_size"] = executor_rule_emb_size
         print(params)
         model = cls(**params)
-        model.load_state_dict(torch.load(model_file))
+
+        model_dict = torch.load(model_file)
+        strict = True
+
+        if executor_rule_emb_size > 0:
+            print("Executor rule embedding size has been set.")
+            strict = False
+
+        model.load_state_dict(model_dict, strict=strict)
         return model
 
     def forward(self, batch):
@@ -774,15 +789,23 @@ class Executor(nn.Module):
                                    features['sum_resource'],
                                    features['money_feat']], 1)
 
-        cmd_type = self.cmd_type_cls.compute_prob(army_inst, ctype_context)
+        rule_emb = None
+        if "rule_tensor" in batch:
+            assert self.executor_rule_emb_size > 0
+            rule_emb = self.rule_emb(batch['rule_tensor'])
+            output, (rule_feat, _) = self.rule_lstm(rule_emb)
+            rule_out = self.rule_out(output[:, -1]).unsqueeze(1).expand(-1, army_inst.size(1), -1)
+            army_inst = torch.nn.functional.relu(rule_out*army_inst)
+
+        cmd_type = self.cmd_type_cls.compute_prob(army_inst, ctype_context, rule_emb=None)
         gather_idx = self.gather_cls.compute_prob(
-            army_inst, features['resource_feat'], None, num_resource)
+            army_inst, features['resource_feat'], None, num_resource, rule_emb=None)
         attack_idx = self.attack_cls.compute_prob(
-            army_inst, features['enemy_feat'], None, num_enemy)
-        unit_type = self.build_unit_cls.compute_prob(army_inst, None)
+            army_inst, features['enemy_feat'], None, num_enemy, rule_emb=None)
+        unit_type = self.build_unit_cls.compute_prob(army_inst, None, rule_emb=None)
         building_type, building_loc = self.build_building_cls.compute_prob(
-            army_inst, features['map_feat'], None)
-        move_loc = self.move_cls.compute_prob(army_inst, features['map_feat'], None)
+            army_inst, features['map_feat'], None, rule_emb=None)
+        move_loc = self.move_cls.compute_prob(army_inst, features['map_feat'], None, rule_emb=None)
 
         # for i in range(num_army[0]):
         #     print('Unit type:', batch['my_units']['types'][0][i].item())

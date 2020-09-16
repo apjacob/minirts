@@ -75,13 +75,14 @@ def masked_softmax(logit, mask, dim):
 
 
 class BuildUnitHead(nn.Module):
-    def __init__(self, ufeat_dim, globfeat_dim, hid_dim, out_dim):
+    def __init__(self, ufeat_dim, globfeat_dim, hid_dim, out_dim, executor_rule_emb_size=0):
         super().__init__()
         self.ufeat_dim = ufeat_dim
         self.globfeat_dim = globfeat_dim
         self.in_dim = ufeat_dim + globfeat_dim
         self.hid_dim = hid_dim
         self.out_dim = out_dim
+        self.executor_rule_emb_size = executor_rule_emb_size
 
         self.net = nn.Sequential(
             weight_norm(nn.Linear(self.in_dim, self.hid_dim), dim=None),
@@ -89,7 +90,16 @@ class BuildUnitHead(nn.Module):
             nn.Linear(self.hid_dim, self.out_dim, bias=False)
         )
 
-    def forward(self, ufeat, globfeat):
+        if self.executor_rule_emb_size > 0:
+            self.rule_net = nn.Sequential(
+                nn.ReLU(),
+                weight_norm(nn.Linear(self.out_dim + self.executor_rule_emb_size, self.hid_dim), dim=None),
+                nn.ReLU(),
+                nn.Linear(self.hid_dim, self.out_dim, bias=False)
+            )
+
+
+    def forward(self, ufeat, globfeat, rule_emb=None):
         if globfeat is None:
             assert self.globfeat_dim == 0
             infeat = ufeat
@@ -99,6 +109,11 @@ class BuildUnitHead(nn.Module):
             infeat = torch.cat([ufeat, globfeat], 2)
 
         logit = self.net(infeat)
+
+        if rule_emb is not None:
+            assert self.executor_rule_emb_size > 0
+            logit = self.rule_net(torch.cat([logit, rule_emb.expand(-1, logit.size(1), -1)], dim=2))
+
         return logit
 
     def compute_loss(self, ufeat, globfeat, target_type, mask, *, include_nil=False):
@@ -129,8 +144,8 @@ class BuildUnitHead(nn.Module):
         nil_logp = logit2logp(logit, nil_type)
         return loss, nil_logp
 
-    def compute_prob(self, ufeat, globfeat, *, logp=False):
-        logit = self.forward(ufeat, globfeat)
+    def compute_prob(self, ufeat, globfeat, *, logp=False, rule_emb=None):
+        logit = self.forward(ufeat, globfeat, rule_emb)
         # logit [batch, pnum_unit, num_unit_type]
         if logp:
             logp = nn.functional.log_softmax(logit, 2)
@@ -159,13 +174,16 @@ class DotBuildBuildingHead(nn.Module):
                  hid_dim,
                  out_dim,
                  x_size,
-                 y_size):
+                 y_size,
+                 executor_rule_emb_size=0):
         super().__init__()
+        self.executor_rule_emb_size = executor_rule_emb_size
 
         self.type_net = BuildUnitHead(
-            ufeat_dim, globfeat_dim, hid_dim, out_dim)
+            ufeat_dim, globfeat_dim, hid_dim, out_dim, self.executor_rule_emb_size)
         self.xy_net = DotMoveHead(
-            ufeat_dim, mapfeat_dim, globfeat_dim, x_size, y_size)
+            ufeat_dim, mapfeat_dim, globfeat_dim, x_size, y_size, self.executor_rule_emb_size)
+
 
     def compute_loss(self, ufeat, mapfeat, globfeat, target_type, x, y, mask):
         """loss, averaged by sum(mask)
@@ -186,9 +204,9 @@ class DotBuildBuildingHead(nn.Module):
         loss = type_loss + xy_loss
         return loss
 
-    def compute_prob(self, ufeat, mapfeat, globfeat):
-        type_prob = self.type_net.compute_prob(ufeat, globfeat)
-        loc_prob = self.xy_net.compute_prob(ufeat, mapfeat, globfeat)
+    def compute_prob(self, ufeat, mapfeat, globfeat, rule_emb=None):
+        type_prob = self.type_net.compute_prob(ufeat, globfeat, rule_emb=rule_emb)
+        loc_prob = self.xy_net.compute_prob(ufeat, mapfeat, globfeat, rule_emb)
         return type_prob, loc_prob
 
     def sample(self, ufeat, mapfeat, globfeat, greedy):
@@ -198,7 +216,7 @@ class DotBuildBuildingHead(nn.Module):
 
 
 class DotMoveHead(nn.Module):
-    def __init__(self, ufeat_dim, mapfeat_dim, globfeat_dim, x_size, y_size):
+    def __init__(self, ufeat_dim, mapfeat_dim, globfeat_dim, x_size, y_size, executor_rule_emb_size=0):
         super().__init__()
 
         self.ufeat_dim = ufeat_dim
@@ -208,13 +226,23 @@ class DotMoveHead(nn.Module):
         self.y_size = y_size
         self.in_dim = ufeat_dim + globfeat_dim
         self.norm = float(np.sqrt(self.mapfeat_dim))
+        self.executor_rule_emb_size = executor_rule_emb_size
 
         self.net = nn.Sequential(
             weight_norm(nn.Linear(self.in_dim, self.mapfeat_dim), dim=None),
             nn.ReLU(),
         )
 
-    def forward(self, ufeat, mapfeat, globfeat):
+        if self.executor_rule_emb_size > 0:
+            self.rule_net = nn.Sequential(
+                weight_norm(nn.Linear(self.mapfeat_dim + self.executor_rule_emb_size, self.executor_rule_emb_size), dim=None),
+                nn.ReLU(),
+                weight_norm(nn.Linear(self.executor_rule_emb_size, self.mapfeat_dim), dim=None),
+                nn.ReLU(),
+            )
+
+
+    def forward(self, ufeat, mapfeat, globfeat, rule_emb=None):
         """
         ufeat: [batch, pnum_unit, ufeat_dim]
         mapfeat: [batch, x*y, mapfeat_dim]
@@ -228,9 +256,14 @@ class DotMoveHead(nn.Module):
         assert globfeat is None and self.globfeat_dim == 0
         infeat = ufeat#, globfeat], 2)
         proj = self.net(infeat)
+        if rule_emb is not None:
+            assert self.executor_rule_emb_size > 0
+            proj = self.rule_net(torch.cat([proj, rule_emb.expand(-1, proj.size(1), -1)], dim=2))
+
         proj = proj.unsqueeze(2).repeat(1, 1, map_dim, 1)
         mapfeat = mapfeat.unsqueeze(1).repeat(1, pnum_unit, 1, 1)
         logit = (proj * mapfeat).sum(3) / self.norm
+
         return logit
 
     def compute_loss(self, ufeat, mapfeat, globfeat, x, y, mask):
@@ -244,8 +277,8 @@ class DotMoveHead(nn.Module):
         loss = -(logp * mask).sum(1)
         return loss
 
-    def compute_prob(self, ufeat, mapfeat, globfeat):
-        logit = self.forward(ufeat, mapfeat, globfeat)
+    def compute_prob(self, ufeat, mapfeat, globfeat, rule_emb=None):
+        logit = self.forward(ufeat, mapfeat, globfeat, rule_emb)
         # logit: [batch, pnum_unit, map_y * map_x]
         prob = nn.functional.softmax(logit, 2)
         return prob
@@ -263,22 +296,31 @@ class DotMoveHead(nn.Module):
         # assert(x < self.x_size)
         return x, y
 
-
 class DotAttackHead(nn.Module):
-    def __init__(self, ufeat_dim, efeat_dim, globfeat_dim):
+    def __init__(self, ufeat_dim, efeat_dim, globfeat_dim, executor_rule_emb_size=0):
         super().__init__()
         self.ufeat_dim = ufeat_dim
         self.efeat_dim = efeat_dim
         self.globfeat_dim = globfeat_dim
         self.in_dim = ufeat_dim + globfeat_dim
         self.norm = float(np.sqrt(self.efeat_dim))
+        self.executor_rule_emb_size = executor_rule_emb_size
 
         self.net = nn.Sequential(
             weight_norm(nn.Linear(self.in_dim, self.efeat_dim), dim=None),
             nn.ReLU(),
         )
 
-    def forward(self, ufeat, efeat, globfeat, num_enemy):
+        if self.executor_rule_emb_size > 0:
+            self.rule_net = nn.Sequential(
+                weight_norm(nn.Linear(self.efeat_dim + self.executor_rule_emb_size, self.executor_rule_emb_size), dim=None),
+                nn.ReLU(),
+                weight_norm(nn.Linear(self.executor_rule_emb_size, self.efeat_dim), dim=None),
+                nn.ReLU(),
+            )
+
+
+    def forward(self, ufeat, efeat, globfeat, num_enemy, rule_emb=None):
         """return masked prob that each real enemy is the target
 
         return: prob: [batch, pnum_unit, pnum_enemy]
@@ -291,6 +333,10 @@ class DotAttackHead(nn.Module):
         infeat = ufeat
         # infeat [batch, pnum_unit, in_dim]
         proj = self.net(infeat)
+        if rule_emb is not None:
+            assert self.executor_rule_emb_size > 0
+            proj = self.rule_net(torch.cat([proj, rule_emb.expand(-1, proj.size(1), -1)], dim=2))
+
         proj = proj.unsqueeze(2).repeat(1, 1, pnum_enemy, 1)
         # proj [batch, pnum_unit, pnum_enemy, efeat_dim]
         efeat = efeat.unsqueeze(1).repeat(1, pnum_unit, 1, 1)
@@ -337,8 +383,8 @@ class DotAttackHead(nn.Module):
         loss = -(logp * mask).sum(1)
         return loss
 
-    def compute_prob(self, ufeat, efeat, globfeat, num_enemy):
-        return self.forward(ufeat, efeat, globfeat, num_enemy)
+    def compute_prob(self, ufeat, efeat, globfeat, num_enemy, rule_emb=None):
+        return self.forward(ufeat, efeat, globfeat, num_enemy, rule_emb)
 
     def sample(self, ufeat, efeat, globfeat, num_enemy, greedy):
         prob = self.forward(ufeat, efeat, globfeat, num_enemy)
@@ -365,12 +411,13 @@ DotGatherHead = DotAttackHead
 
 
 class GlobClsHead(nn.Module):
-    def __init__(self, globfeat_dim, hid_dim, out_dim):
+    def __init__(self, globfeat_dim, hid_dim, out_dim, executor_rule_emb_size=0):
         super().__init__()
         self.globfeat_dim = globfeat_dim
         self.in_dim = globfeat_dim
         self.hid_dim = hid_dim
         self.out_dim = out_dim
+        self.executor_rule_emb_size = executor_rule_emb_size
 
         self.net = nn.Sequential(
             weight_norm(nn.Linear(self.in_dim, self.hid_dim), dim=None),
@@ -378,8 +425,21 @@ class GlobClsHead(nn.Module):
             weight_norm(nn.Linear(self.hid_dim, self.out_dim), dim=None)
         )
 
-    def forward(self, globfeat):
+        if self.executor_rule_emb_size > 0:
+            self.rule_net = nn.Sequential(
+                nn.ReLU(),
+                weight_norm(nn.Linear(self.out_dim + self.executor_rule_emb_size, self.hid_dim), dim=None),
+                nn.ReLU(),
+                weight_norm(nn.Linear(self.hid_dim, self.out_dim), dim=None),
+            )
+
+    def forward(self, globfeat, rule_emb=None):
         logit = self.net(globfeat)
+
+        if rule_emb is not None:
+            assert self.executor_rule_emb_size > 0
+            logit = self.rule_net(torch.cat([logit, rule_emb], dim=1))  # Which dim? Also repeat?
+
         return logit
 
     def compute_loss(self, globfeat, target):
@@ -396,8 +456,8 @@ class GlobClsHead(nn.Module):
         loss = -logp
         return loss
 
-    def compute_prob(self, globfeat, *, temp=1, log=False):
-        logit = self.forward(globfeat)
+    def compute_prob(self, globfeat, *, temp=1, log=False, rule_emb=None):
+        logit = self.forward(globfeat, rule_emb)
         # print("CLS Prob norm: ", logit.norm(2))
         logit = logit / temp
         # logit [batch, 2]
