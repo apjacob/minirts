@@ -81,9 +81,12 @@ class ConvRnnCoach(nn.Module):
         return model
 
     @classmethod
-    def rl_load(cls, model_file, coach_rule_emb_size=0):
+    def rl_load(cls, model_file, coach_rule_emb_size=0, inst_dict_path=None):
         params = pickle.load(open(model_file + '.params', 'rb'))
         arg_dict = params['args'].__dict__
+        if inst_dict_path:
+            print("Using instructor dictionary path...")
+            arg_dict["inst_dict_path"] = inst_dict_path
 
         ## Setting all dropouts to 0.0
         for k, v in arg_dict.items():

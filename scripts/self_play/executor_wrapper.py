@@ -49,7 +49,8 @@ class ExecutorWrapper(nn.Module):
         super().__init__()
         self.coach = coach
         self.executor = executor
-        assert self.executor.inst_dict._idx2inst == self.coach.inst_dict._idx2inst
+        if coach:
+            assert self.executor.inst_dict._idx2inst == self.coach.inst_dict._idx2inst
 
         self.num_insts = num_insts
         self.max_raw_chars = max_raw_chars

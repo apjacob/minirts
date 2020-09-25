@@ -149,7 +149,7 @@ if __name__ == '__main__':
     for inst  in executor.inst_dict._idx2inst[:500]:
         print(inst)
     executor_wrapper = ExecutorWrapper(
-        None, executor, args.num_instructions, args.max_raw_chars)
+        None, executor, args.num_instructions, args.max_raw_chars, 0, "full")
     executor_wrapper.train(False)
 
     context.start()

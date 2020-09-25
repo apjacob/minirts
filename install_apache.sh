@@ -32,9 +32,9 @@ make
 make install
 
 cd $SCRIPTPATH
-wget https://www-us.apache.org/dist//httpd/httpd-2.4.41.tar.gz
-tar -zxf httpd-2.4.41.tar.gz
-cd $SCRIPTPATH/httpd-2.4.41
+wget https://downloads.apache.org/httpd/httpd-2.4.46.tar.gz
+tar -zxf httpd-2.4.46.tar.gz
+cd $SCRIPTPATH/httpd-2.4.46
 ./configure --prefix=$SCRIPTPATH/httpd \
             --with-apr=$SCRIPTPATH/apr \
             --with-apr-util=$SCRIPTPATH/apr_util

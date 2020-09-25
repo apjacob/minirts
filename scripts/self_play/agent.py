@@ -75,15 +75,16 @@ class Agent:
 
         coach_rule_emb_size = getattr(args, "coach_rule_emb_size", 0)
         executor_rule_emb_size = getattr(args, "executor_rule_emb_size", 0)
+        inst_dict_path = getattr(args, "inst_dict_path", None)
 
         if 'onehot' in coach_path:
             coach = ConvOneHotCoach.load(coach_path).to(self.device)
         elif 'gen' in coach_path:
             coach = RnnGenerator.load(coach_path).to(self.device)
         else:
-            coach = ConvRnnCoach.rl_load(coach_path, coach_rule_emb_size).to(self.device)
+            coach = ConvRnnCoach.rl_load(coach_path, coach_rule_emb_size, inst_dict_path).to(self.device)
         coach.max_raw_chars = args.max_raw_chars
-        executor = Executor.rl_load(model_path, executor_rule_emb_size).to(self.device)
+        executor = Executor.rl_load(model_path, executor_rule_emb_size, inst_dict_path).to(self.device)
         executor_wrapper = ExecutorWrapper(
             coach, executor, coach.num_instructions, args.max_raw_chars, args.cheat, args.inst_mode)
         executor_wrapper.train(False)
@@ -192,11 +193,9 @@ class Agent:
         self.save_folder = os.path.join(self.args.save_folder, log_name)
 
         if os.path.exists(self.save_folder):
-            print("Attempting to create an existing folder..")
-            import pdb
-            pdb.set_trace()
-
-        os.makedirs(self.save_folder)
+            print("Attempting to create an existing folder.. hence skipping...")
+        else:
+            os.makedirs(self.save_folder)
 
 
     #######################

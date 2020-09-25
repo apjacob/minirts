@@ -12,6 +12,7 @@ import tube
 import copy
 from agent import Agent
 from pytube import DataChannelManager
+from collections import defaultdict, Counter
 from game_utils import *
 from agent import Agent
 from jinja2 import Environment, FileSystemLoader
@@ -25,6 +26,13 @@ import shutil
 
 UNITS = ['swordman', 'spearman', 'cavalry', 'archer', 'dragon']
 UNIT_DICT = {unit: i for i, unit in enumerate(UNITS)}
+rps_dict = {
+    "swordman": "Effective against spearmen.",
+    "spearman": "Effective against cavalry.",
+    "cavalry": "Effective gainst swordmen.",
+    "archer": "Great counter unit against dragons.",
+    "dragon": "Can fly over obstacles, can only be attacked by archers and towers."
+}
 
 class Game:
     def __init__(self, sp_agent, bc_agent, index, args):
@@ -154,7 +162,7 @@ class MultiTaskGame(Game):
         self.working_rule_dir = working_rule_dir
 
 
-    def init_rule_games(self, rule, num_sp=None, num_rb=None):
+    def init_rule_games(self, rule, num_sp=None, num_rb=None, viz=False):
         lua_files = self.generate_files(rule)
 
         os.environ['LUA_PATH'] = os.path.join(lua_files, '?.lua')
@@ -170,8 +178,35 @@ class MultiTaskGame(Game):
             num_rb = self.args.num_rb
 
         self.context, self.act1_dc, self.act2_dc = init_mt_games(num_sp, num_rb, self.args, ai1_option, ai2_option,
-                                                                 game_option)
+                                                                 game_option, viz=viz)
 
+    def init_rule_games_botvbot(self, bot1idx, bot2idx, rule, num_games, viz=False):
+        lua_files = self.generate_files(rule)
+
+        os.environ['LUA_PATH'] = os.path.join(lua_files, '?.lua')
+        print('lua path:', os.environ['LUA_PATH'])
+
+        game_option = get_game_option(self.args, lua_files)
+        ai1_option, ai2_option = get_ai_options(
+            self.args, [self.agent1.model.coach.num_instructions, self.agent1.model.coach.num_instructions])
+
+        self.context, self.act1_dc, self.act2_dc = init_botvbot(bot1idx=bot1idx, bot2idx=bot2idx, num_games=num_games,
+                                                                args=self.args, ai1_option=ai1_option, ai2_option=ai2_option,
+                                                                 game_option=game_option, viz=viz)
+
+    def init_rule_games_vbot(self, botidx, rule, num_games, viz=False):
+        lua_files = self.generate_files(rule)
+
+        os.environ['LUA_PATH'] = os.path.join(lua_files, '?.lua')
+        print('lua path:', os.environ['LUA_PATH'])
+
+        game_option = get_game_option(self.args, lua_files)
+        ai1_option, ai2_option = get_ai_options(
+            self.args, [self.agent1.model.coach.num_instructions, self.agent1.model.coach.num_instructions])
+
+        self.context, self.act1_dc, self.act2_dc = init_vbot(botidx=botidx, num_games=num_games,
+                                                                args=self.args, ai1_option=ai1_option, ai2_option=ai2_option,
+                                                                 game_option=game_option, viz=viz)
 
     def generate_files(self, rule):
         file_loader = FileSystemLoader(self.working_rule_dir)
@@ -273,6 +308,189 @@ class MultiTaskGame(Game):
 
         return results
 
+    def analyze_rule_games(self, epoch, rule_idx, split='valid', viz=False, num_games=100):
+        device = torch.device('cuda:%d' % self.args.gpu)
+        num_games = num_games
+
+        if split=='valid':
+            permute = self.valid_permute
+        elif split=='test':
+            permute = self.test_permute
+        elif split=='train':
+            permute = self.train_permute
+        else:
+            raise Exception("Invalid split.")
+
+        cur_iter_idx = 0
+        results = {}
+        for rule_id in rule_idx: ##TODO: Not randomized
+            rule = permute[rule_id]
+            self.init_rule_games(rule, num_sp=0, num_rb=num_games, viz=viz)
+            agent1, agent2  = self.start()
+
+            agent1.eval()
+            agent2.eval()
+
+            pbar = tqdm(total=num_games)
+
+            while not self.finished():
+
+                data = self.get_input()
+
+                if len(data) == 0:
+                    continue
+                for key in data:
+                    # print(key)
+                    batch = to_device(data[key], device)
+
+                    if key == 'act1':
+                        batch['actor'] = 'act1'
+                        reply = agent1.simulate(cur_iter_idx, batch)
+                        t_count = agent1.update_logs(cur_iter_idx, batch, reply)
+
+                    elif key == 'act2':
+                        batch['actor'] = 'act2'
+                        reply = agent2.simulate(cur_iter_idx, batch)
+                        t_count = agent2.update_logs(cur_iter_idx, batch, reply)
+
+                    else:
+                        assert False
+
+                    self.set_reply(key, reply)
+                    pbar.update(t_count)
+
+            a1_result = self.agent1.result
+
+            results[rule_id] = {"win": a1_result.win / a1_result.num_games,
+                                 "loss": a1_result.loss / a1_result.num_games}
+
+            cur_iter_idx += 1
+            print(results)
+            counter = Counter()
+            for game_id, insts in agent1.traj_dict.items():
+                for inst in insts:
+                    counter[inst] += 1
+
+            print("##### TOP N Instructions #####")
+            print(counter.most_common(10))
+            print("##############################")
+
+            pbar.close()
+            self.terminate()
+
+        avg_win_rate = 0
+        for rule, wl in results.items():
+            wandb.log({"{}/{}/Win".format(split, rule): wl["win"],
+                       "{}/{}/Loss".format(split, rule): wl["loss"]})
+            avg_win_rate += wl["win"]/len(rule_idx)
+
+        print("Average win rate: {}".format(avg_win_rate))
+        if avg_win_rate > self.agent1.best_test_win_pct:
+            self.agent1.best_test_win_pct = avg_win_rate
+            self.agent1.save_coach(epoch)
+            self.agent1.save_executor(epoch)
+
+        return results
+
+    def analyze_rule_games_vbot(self, epoch, rule_idx, split='valid', viz=False, num_games=100):
+        device = torch.device('cuda:%d' % self.args.gpu)
+        num_games = num_games
+
+        if split=='valid':
+            permute = self.valid_permute
+        elif split=='test':
+            permute = self.test_permute
+        elif split=='train':
+            permute = self.train_permute
+        else:
+            raise Exception("Invalid split.")
+
+        cur_iter_idx = 0
+        results = {}
+        unitidx = [0, 1, 2, 3, 4]
+        botidx = random.choice(unitidx)
+        counter = Counter()
+        idx2utype = [
+            "SWORDMAN",
+            "SPEARMAN",
+            "CAVALRY",
+            "ARCHER",
+            "DRAGON",
+        ]
+
+        rule = permute[rule_idx]
+        rule_rps_dict = rps_dict.copy()
+        for i, unit in enumerate(rule):
+            rule_rps_dict[UNITS[i]] = rps_dict[unit]
+
+        print("############RULE RPS###################")
+        print(rule_rps_dict)
+        print("#######################################")
+
+
+        print(f"Playing against bot {idx2utype[botidx]}")
+        self.init_rule_games_vbot(botidx=botidx, rule=rule, num_games=num_games, viz=viz)
+        agent1, agent2  = self.start()
+
+        agent1.eval()
+        agent2.eval()
+
+        pbar = tqdm(total=num_games)
+
+        while not self.finished():
+
+            data = self.get_input()
+
+            if len(data) == 0:
+                continue
+            for key in data:
+                # print(key)
+                batch = to_device(data[key], device)
+
+                if key == 'act1':
+                    batch['actor'] = 'act1'
+                    reply = agent1.simulate(cur_iter_idx, batch)
+                    t_count = agent1.update_logs(cur_iter_idx, batch, reply)
+
+                elif key == 'act2':
+                    batch['actor'] = 'act2'
+                    reply = agent2.simulate(cur_iter_idx, batch)
+                    t_count = agent2.update_logs(cur_iter_idx, batch, reply)
+
+                else:
+                    assert False
+
+                self.set_reply(key, reply)
+                pbar.update(t_count)
+
+        a1_result = self.agent1.result
+
+        results[rule_idx] = {"win": a1_result.win / a1_result.num_games,
+                             "loss": a1_result.loss / a1_result.num_games}
+
+        cur_iter_idx += 1
+        print(results)
+
+        for game_id, insts in agent1.traj_dict.items():
+            for inst in insts:
+                counter[inst] += 1
+
+        pbar.close()
+        self.terminate()
+
+        avg_win_rate = 0
+        for rule, wl in results.items():
+            wandb.log({"{}/{}/Win".format(split, rule): wl["win"],
+                       "{}/{}/Loss".format(split, rule): wl["loss"]})
+            avg_win_rate += wl["win"]
+
+        if avg_win_rate > self.agent1.best_test_win_pct:
+            self.agent1.best_test_win_pct = avg_win_rate
+            self.agent1.save_coach(epoch)
+            self.agent1.save_executor(epoch)
+
+        return idx2utype[botidx], rule_idx, avg_win_rate, counter.most_common(10)
+
     def evaluate_rules(self, epoch, rule_idx, split='valid'):
         device = torch.device('cuda:%d' % self.args.gpu)
         num_games = 100
@@ -347,20 +565,93 @@ class MultiTaskGame(Game):
 
         return results
 
+    def evaluate_lifelong_rules(self, epoch, rule_series, split='train'):
+        device = torch.device('cuda:%d' % self.args.gpu)
+        num_games = 100
+
+        if split=='valid':
+            permute = self.valid_permute
+        elif split=='test':
+            permute = self.test_permute
+        elif split=='train':
+            permute = self.train_permute
+        else:
+            raise Exception("Invalid split.")
+
+        cur_iter_idx = 0
+        results = {}
+        for rule_id in rule_series:
+            rule = permute[rule_id]
+            print("Current rule: {}".format(rule))
+            self.init_rule_games(rule, num_sp=0, num_rb=num_games)
+            agent1, agent2  = self.start()
+
+            agent1.eval()
+            agent2.eval()
+
+            pbar = tqdm(total=num_games)
+
+            while not self.finished():
+
+                data = self.get_input()
+
+                if len(data) == 0:
+                    continue
+                for key in data:
+                    # print(key)
+                    batch = to_device(data[key], device)
+
+                    if key == 'act1':
+                        batch['actor'] = 'act1'
+                        reply = agent1.simulate(cur_iter_idx, batch)
+                        t_count = agent1.update_logs(cur_iter_idx, batch, reply)
+
+                    elif key == 'act2':
+                        batch['actor'] = 'act2'
+                        reply = agent2.simulate(cur_iter_idx, batch)
+                        t_count = agent2.update_logs(cur_iter_idx, batch, reply)
+
+                    else:
+                        assert False
+
+                    self.set_reply(key, reply)
+                    pbar.update(t_count)
+
+            a1_result = self.agent1.result
+
+            results[rule_id] = {"win": a1_result.win / a1_result.num_games,
+                                 "loss": a1_result.loss / a1_result.num_games}
+
+            cur_iter_idx += 1
+            pbar.close()
+            self.terminate()
+
+        avg_win_rate = 0
+        for rule, wl in results.items():
+            wandb.log({"Lifelong/{}/{}/Win".format(split, rule): wl["win"],
+                       "Lifelong/{}/{}/Loss".format(split, rule): wl["loss"]})
+            avg_win_rate += wl["win"]/len(rule_series)
+
+        print("Average win rate: {}".format(avg_win_rate))
+        if avg_win_rate > self.agent1.best_test_win_pct:
+            self.agent1.best_test_win_pct = avg_win_rate
+            self.agent1.save_coach(epoch)
+            self.agent1.save_executor(epoch)
+
+        return results
+
 def create_working_dir(args, working_dir):
 
     if os.path.exists(working_dir):
-        print("Attempting to create an existing folder..")
-        import pdb
-        pdb.set_trace()
+        print("Attempting to create an existing folder.. hence skipping")
+    else:
+        os.makedirs(working_dir)
+        src = args.rule_dir
+        dest = working_dir
+        src_files = os.listdir(src)
+        for file_name in src_files:
+            full_file_name = os.path.join(src, file_name)
+            if os.path.isfile(full_file_name):
+                shutil.copy(full_file_name, dest)
 
-    os.makedirs(working_dir)
-    src = args.rule_dir
-    dest = working_dir
-    src_files = os.listdir(src)
-    for file_name in src_files:
-        full_file_name = os.path.join(src, file_name)
-        if os.path.isfile(full_file_name):
-            shutil.copy(full_file_name, dest)
-
-    print("Created working rule directory at: {}".format(dest))
+    print("Created working rule directory at: {}".format(working_dir))

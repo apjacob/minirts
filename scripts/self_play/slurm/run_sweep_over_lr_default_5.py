@@ -6,7 +6,7 @@ import itertools
 from utils import SLURM_TEMPLATE, create_dir
 
 SAVE_DIR = "/home/gridsan/apjacob/sweeps"
-JOB_SWEEP_NAME = "multitask_zero_sweep_third"
+JOB_SWEEP_NAME = "default_lr_multitask_fixed_sweep"
 
 time = time.strftime("%Y%m%d-%H%M%S")
 job_output_dir = os.path.join(SAVE_DIR, f"{JOB_SWEEP_NAME}-{time}")
@@ -16,28 +16,19 @@ print(f"Job output directory: {job_output_dir}")
 create_dir(job_output_dir)
 
 # Sweep params
-coach_rule_emb_sizes = [0, 50]
-executor_rule_emb_sizes = [0, 50]
-lrs = [1e-5, 5e-5]
-rnns = ["zero", "rnn"]
+rules = [80]
+lrs = [1e-4, 1e-5, 5e-6]
 train_modes = ["coach", "executor", "both"]
+rnns = ["rnn", "zero"]
 
-for coach_rule_emb_size, executor_rule_emb_size, lr, rnn, train_mode in \
-        itertools.product(coach_rule_emb_sizes, executor_rule_emb_sizes, lrs, rnns, train_modes):
-    job_name = f"coach_emb-{coach_rule_emb_size}-exec_emb-{executor_rule_emb_size}-lr-{lr}-rnns-{rnn}-train_mode-{train_mode}"
+for rule, lr, rnn, train_mode in itertools.product(rules, lrs, rnns, train_modes):
+    job_name = f"lr-{lr}-rule-{rule}-rnns-{rnn}-train_mode-{train_mode}"
     job_file_name = os.path.join(job_output_dir, f"{job_name}.job")
     job_log_file = os.path.join(job_output_dir, f"{job_name}.log")
-
-    if rnn == "zero" and (train_mode != "executor" or coach_rule_emb_size > 0) :
+    if rnn == "zero" and train_mode != "executor" :
         continue
 
-    if coach_rule_emb_size > 0 and train_mode == "executor":
-        continue
-
-    if executor_rule_emb_size > 0 and train_mode == "coach":
-        continue
-
-    python_command = "python -u /home/gridsan/apjacob/minirts/scripts/self_play/multitask-zero.py --coach1 rnn500 " \
+    python_command = "python -u /home/gridsan/apjacob/minirts/scripts/self_play/multitask-fixed.py --coach1 rnn500 " \
               "--coach2 rnn500 " \
               f"--executor1 {rnn} " \
               f"--executor2 {rnn} " \
@@ -51,9 +42,7 @@ for coach_rule_emb_size, executor_rule_emb_size, lr, rnn, train_mode in \
               "--wandb_dir /home/gridsan/apjacob/wandb/ " \
               "--pg ppo --ppo_epochs 4 --train_batch_size 32 " \
               f"--num_rb=25 --num_sp=0 --train_mode={train_mode} " \
-              f"--executor_rule_emb_size={executor_rule_emb_size} " \
-              f"--coach_rule_emb_size={coach_rule_emb_size} > {job_log_file}"
-
+              f"--rule {rule} > {job_log_file}"
     print(f"Command: {python_command}")
 
     job_output = os.path.join(job_output_dir, f"{job_name}")
