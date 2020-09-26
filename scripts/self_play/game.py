@@ -27,12 +27,11 @@ import shutil
 UNITS = ['swordman', 'spearman', 'cavalry', 'archer', 'dragon']
 UNIT_DICT = {unit: i for i, unit in enumerate(UNITS)}
 rps_dict = {
-    "swordman": "Effective against spearmen.",
-    "spearman": "Effective against cavalry.",
-    "cavalry": "Effective gainst swordmen.",
-    "archer": "Great counter unit against dragons.",
-    "dragon": "Can fly over obstacles, can only be attacked by archers and towers."
-}
+    "swordman": "Effective against {spearmen}, No bonus against {archer, swordman}, Not effective against {cavalry}, Cannot attack {Dragon}",
+    "spearman": "Effective against {cavalry}, No bonus against {archer, spearman}, Not effective against {swordman}, Cannot attack {Dragon}",
+    "cavalry" : "Effective against {swordman}, No bonus against {archer, cavalry}, Not effective against {spearman}, Cannot attack {Dragon}",
+    "archer"  : "Effective against {Dragon}, Not effective against {spearmen, cavalry, swordman, archer}",
+    "dragon"  : "Effective against {-}, No bonus against {spearmen, cavalry, swordman}, Not effective against {archer} ",}
 
 class Game:
     def __init__(self, sp_agent, bc_agent, index, args):
@@ -424,7 +423,8 @@ class MultiTaskGame(Game):
             rule_rps_dict[UNITS[i]] = rps_dict[unit]
 
         print("############RULE RPS###################")
-        print(rule_rps_dict)
+        for unit, multiplier in rule_rps_dict.items():
+            print(f"{unit}: {multiplier}")
         print("#######################################")
 
 
@@ -484,6 +484,7 @@ class MultiTaskGame(Game):
                        "{}/{}/Loss".format(split, rule): wl["loss"]})
             avg_win_rate += wl["win"]
 
+        print(f"Average win rate: {avg_win_rate}")
         if avg_win_rate > self.agent1.best_test_win_pct:
             self.agent1.best_test_win_pct = avg_win_rate
             self.agent1.save_coach(epoch)
