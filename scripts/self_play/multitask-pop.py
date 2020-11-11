@@ -40,7 +40,7 @@ import wandb
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Minirts multitask lifelong")
+    parser = argparse.ArgumentParser(description="Minirts multitask population-based")
     parser.add_argument("--seed", type=int, default=1)
 
     parser.add_argument("--num_sp", type=int, default=10)
@@ -130,6 +130,7 @@ def parse_args():
     parser.add_argument(
         "--rule_series", nargs="+", help="series of rules", required=True
     )
+    parser.add_argument("--coach_random_init", type=bool, default=False)
     args = parser.parse_args()
 
     return args
@@ -137,14 +138,12 @@ def parse_args():
 
 def self_play(args):
 
-    wandb.init(
-        project="adapt-minirts-lifelong", sync_tensorboard=True, dir=args.wandb_dir
-    )
+    wandb.init(project="adapt-minirts-pop", sync_tensorboard=True, dir=args.wandb_dir)
     # run_id = f"multitask-fixed_selfplay-{args.coach1}-{args.executor1}-{args.train_mode}-rule{args.rule}-{args.tag}"
     log_series = ",".join(args.rule_series)
     wandb.run.name = (
-        f"multitask-lifelong_selfplay-{wandb.run.id}-{args.coach1}-{args.executor1}"
-        f"-{args.train_mode}-rule_series={log_series}-{args.tag}"
+        f"multitask-pop_selfplay-{wandb.run.id}-{args.coach1}-{args.executor1}"
+        f"-{args.train_mode}-rule_series={log_series}-random_coach={args.coach_random_init}-{args.tag}"
     )
     # wandb.run.save()
     wandb.config.update(args)
@@ -174,7 +173,7 @@ def self_play(args):
         _executor1 = args.executor1
         args.executor1 = best_executors[args.executor1]
 
-    log_name = "multitask-lifelong_c1_type={}_c2_type={}__e1_type={}_e2_type={}__lr={}__num_sp={}__num_rb={}_{}_{}".format(
+    log_name = "multitask-pop_c1_type={}_c2_type={}__e1_type={}_e2_type={}__lr={}__num_sp={}__num_rb={}_coach_random_init={}_{}_{}".format(
         _coach1,
         args.coach2,
         _executor1,
@@ -182,6 +181,7 @@ def self_play(args):
         args.lr,
         args.num_sp,
         args.num_rb,
+        args.coach_random_init,
         args.tag,
         random.randint(1111, 9999),
     )
@@ -196,28 +196,37 @@ def self_play(args):
 
     device = torch.device("cuda:%d" % args.gpu)
 
-    sp_agent = Agent(
-        coach=args.coach1,
-        executor=args.executor1,
-        device=device,
-        args=args,
-        writer=writer,
-        trainable=True,
-        exec_sample=True,
-        pg=args.pg,
-    )
+    agent_dict = {}
+    for rule in args.rule_series:
+        sp_agent = Agent(
+            coach=args.coach1,
+            executor=args.executor1,
+            device=device,
+            args=args,
+            writer=writer,
+            trainable=True,
+            exec_sample=True,
+            pg=args.pg,
+            tag=f"_{rule}",
+        )
 
-    sp_agent.init_save_folder(wandb.run.name)
+        ## Sharing executors
+        args.executor1 = sp_agent.model.executor
 
-    bc_agent = Agent(
-        coach=args.coach2,
-        executor=args.executor2,
-        device=device,
-        args=args,
-        writer=writer,
-        trainable=False,
-        exec_sample=False,
-    )
+        sp_agent.init_save_folder(wandb.run.name)
+
+        bc_agent = Agent(
+            coach=args.coach2,
+            executor=args.executor2,
+            device=device,
+            args=args,
+            writer=writer,
+            trainable=False,
+            exec_sample=False,
+            tag=f"_{rule}",
+        )
+
+        agent_dict[int(rule)] = {"sp_agent": sp_agent, "bc_agent": bc_agent}
 
     print("Progress: ")
     ## Create Save folder:
@@ -226,14 +235,26 @@ def self_play(args):
 
     cur_iter_idx = 1
     rules = [int(str_rule) for str_rule in args.rule_series]
-    for rule_idx in rules:
 
-        print("Current rule: {}".format(rule_idx))
-        game = MultiTaskGame(sp_agent, bc_agent, cur_iter_idx, args, working_rule_dir)
+    for epoch in range(args.train_epochs):
+        for rule_idx in rules:
 
-        for epoch in range(args.train_epochs):
             if epoch % args.eval_factor == 0:
-                game.evaluate_lifelong_rules(cur_iter_idx, list(set(rules)), "train")
+                for eval_rule_idx in rules:
+                    sp_agent = agent_dict[eval_rule_idx]["sp_agent"]
+                    bc_agent = agent_dict[eval_rule_idx]["bc_agent"]
+                    game = MultiTaskGame(
+                        sp_agent, bc_agent, cur_iter_idx, args, working_rule_dir
+                    )
+                    game.evaluate_lifelong_rules(cur_iter_idx, [eval_rule_idx], "train")
+
+            sp_agent = agent_dict[rule_idx]["sp_agent"]
+            bc_agent = agent_dict[rule_idx]["bc_agent"]
+
+            print("Current rule: {}".format(rule_idx))
+            game = MultiTaskGame(
+                sp_agent, bc_agent, cur_iter_idx, args, working_rule_dir
+            )
 
             rule = game.train_permute[rule_idx]
             print("Current rule: {}".format(rule))
@@ -282,6 +303,7 @@ def self_play(args):
 
             game.print_logs(cur_iter_idx)
             cur_iter_idx += 1
+            wandb.run.summary[f"max_iterations"] = cur_iter_idx
             pbar.close()
             game.terminate()
 

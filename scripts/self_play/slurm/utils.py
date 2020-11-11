@@ -1,6 +1,6 @@
 import os
 
-SLURM_TEMPLATE = '''
+SLURM_TEMPLATE = """
 #!/bin/bash
 
 #SBATCH --partition=normal
@@ -22,10 +22,11 @@ source /etc/profile
 module load cuda/10.1
 
 # Activate conda env
-conda activate minirts
+conda activate minirts2
 
 {python_command}
-'''
+"""
+
 
 def create_dir(dir):
     if not os.path.exists(dir):

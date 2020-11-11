@@ -19,7 +19,10 @@ import common_utils.global_consts as gc
 
 NUM_UNIT_TYPES = 5
 
-def parse_hist_inst(inst_dict, hist_inst, hist_inst_diff, inst, inst_len, inst_cont, word_based):
+
+def parse_hist_inst(
+    inst_dict, hist_inst, hist_inst_diff, inst, inst_len, inst_cont, word_based
+):
     device = hist_inst.device
 
     parsed_hist = []
@@ -32,7 +35,7 @@ def parse_hist_inst(inst_dict, hist_inst, hist_inst_diff, inst, inst_len, inst_c
         l_list = []
 
         j = 0
-        new_inst = (inst_cont[bid].item() == 0)
+        new_inst = inst_cont[bid].item() == 0
         if new_inst:
             j = 1
         while j < num_inst:
@@ -74,8 +77,7 @@ def parse_hist_inst(inst_dict, hist_inst, hist_inst_diff, inst, inst_len, inst_c
 
 
 def log_sum_exp(log1, log2):
-    """compute the log(sum(exp(log1) + exp(log2)))
-    """
+    """compute the log(sum(exp(log1) + exp(log2)))"""
     alpha = torch.max(log1, log2)
     # alpha = logs.max(dim, keepdim=True)[0] - _HALF_LOG_MAX #
     log1 = log1 - alpha
@@ -110,7 +112,7 @@ def test_create_loss_masks():
     num_cmd_type = 3
     cmd_type = (torch.rand((3, 5)) * num_cmd_type).long()
     print(cmd_type)
-    print('======')
+    print("======")
     print(create_loss_masks(num_unit, cmd_type, num_cmd_type)[1])
 
 
@@ -121,21 +123,36 @@ class Executor(nn.Module):
         parser = ConvGlobEncoder.get_arg_parser()
 
         # inst encoder
-        parser.add_argument('--rnn_word_emb_dim',
-                            type=int, default=64, help='word emb dim for rnn encoder')
-        parser.add_argument('--word_emb_dropout',
-                            type=float, default=0, help='word emb dim for rnn encoder')
-        parser.add_argument('--top_num_inst',
-                            type=int, default=-1, help='num isnt for topn encoder')
-        parser.add_argument('--inst_hid_dim',
-                            type=int, default=64, help='hid size of inst encoder')
-        parser.add_argument('--inst_encoder_type',
-                            type=str, default='bow', help='type of instructions encoder')
+        parser.add_argument(
+            "--rnn_word_emb_dim",
+            type=int,
+            default=64,
+            help="word emb dim for rnn encoder",
+        )
+        parser.add_argument(
+            "--word_emb_dropout",
+            type=float,
+            default=0,
+            help="word emb dim for rnn encoder",
+        )
+        parser.add_argument(
+            "--top_num_inst", type=int, default=-1, help="num isnt for topn encoder"
+        )
+        parser.add_argument(
+            "--inst_hid_dim", type=int, default=64, help="hid size of inst encoder"
+        )
+        parser.add_argument(
+            "--inst_encoder_type",
+            type=str,
+            default="bow",
+            help="type of instructions encoder",
+        )
 
         # dictionary related
-        parser.add_argument('--inst_dict_path',
-                            type=str, required=True, help='path to dictionary')
-        parser.add_argument('--max_sentence_length', type=int, default=15)
+        parser.add_argument(
+            "--inst_dict_path", type=str, required=True, help="path to dictionary"
+        )
+        parser.add_argument("--max_sentence_length", type=int, default=15)
 
         # # for the first term in loss
         # parser.add_argument('--cmd_type_hid_dim', type=int, default=128)
@@ -147,11 +164,11 @@ class Executor(nn.Module):
         return parser
 
     def _load_inst_dict(self, inst_dict_path):
-        print('loading cmd dict from: ', inst_dict_path)
-        if inst_dict_path is None or inst_dict_path == '':
+        print("loading cmd dict from: ", inst_dict_path)
+        if inst_dict_path is None or inst_dict_path == "":
             return None
 
-        inst_dict = pickle.load(open(inst_dict_path, 'rb'))
+        inst_dict = pickle.load(open(inst_dict_path, "rb"))
         inst_dict.set_max_sentence_length(self.args.max_sentence_length)
         return inst_dict
 
@@ -161,14 +178,14 @@ class Executor(nn.Module):
         dict_size = self.inst_dict.total_vocab_size
         padding_idx = self.inst_dict.pad_word_idx
 
-        if self.args.inst_encoder_type == 'bow':
+        if self.args.inst_encoder_type == "bow":
             encoder = MeanBOWInstructionEncoder(
                 dict_size,
                 self.args.inst_hid_dim,
                 self.args.word_emb_dropout,
                 padding_idx,
             )
-        elif self.args.inst_encoder_type == 'lstm':
+        elif self.args.inst_encoder_type == "lstm":
             encoder = LSTMInstructionEncoder(
                 dict_size,
                 self.args.rnn_word_emb_dim,
@@ -176,7 +193,7 @@ class Executor(nn.Module):
                 self.args.inst_hid_dim,
                 padding_idx,
             )
-        elif self.args.inst_encoder_type == 'gru':
+        elif self.args.inst_encoder_type == "gru":
             encoder = GRUInstructionEncoder(
                 dict_size,
                 self.args.rnn_word_emb_dim,
@@ -184,11 +201,11 @@ class Executor(nn.Module):
                 self.args.inst_hid_dim,
                 padding_idx,
             )
-        elif self.args.inst_encoder_type == 'zero':
+        elif self.args.inst_encoder_type == "zero":
             encoder = ZeroInstructionEncoder(
                 self.args.inst_hid_dim,
             )
-        elif self.args.inst_encoder_type == 'topn':
+        elif self.args.inst_encoder_type == "topn":
             assert self.args.top_num_inst > 0
             encoder = TopNInstructionEncoder(
                 self.args.top_num_inst,
@@ -196,28 +213,30 @@ class Executor(nn.Module):
                 self.args.inst_hid_dim,
             )
         else:
-            assert False, 'not supported yet'
+            assert False, "not supported yet"
 
         return encoder
 
-    def __init__(self,
-                 args,
-                 num_resource_bin,
-                 *,
-                 num_unit_type=len(gc.UnitTypes),
-                 num_cmd_type=len(gc.CmdTypes),
-                 x_size=gc.MAP_X,
-                 y_size=gc.MAP_Y,
-                 executor_rule_emb_size=0):
+    def __init__(
+        self,
+        args,
+        num_resource_bin,
+        *,
+        num_unit_type=len(gc.UnitTypes),
+        num_cmd_type=len(gc.CmdTypes),
+        x_size=gc.MAP_X,
+        y_size=gc.MAP_Y,
+        executor_rule_emb_size=0,
+    ):
         super().__init__()
 
         self.params = {
-            'args': args,
-            'num_resource_bin': num_resource_bin,
-            'num_unit_type': num_unit_type,
-            'num_cmd_type': num_cmd_type,
-            'x_size': x_size,
-            'y_size': y_size
+            "args": args,
+            "num_resource_bin": num_resource_bin,
+            "num_unit_type": num_unit_type,
+            "num_cmd_type": num_cmd_type,
+            "x_size": x_size,
+            "y_size": y_size,
         }
         self.args = args
         self.num_cmd_type = num_cmd_type
@@ -227,11 +246,8 @@ class Executor(nn.Module):
         self.inst_encoder = self._create_inst_encoder()
 
         self.conv_encoder = ConvGlobEncoder(
-            args,
-            num_unit_type,
-            num_cmd_type,
-            num_resource_bin,
-            self.inst_encoder)
+            args, num_unit_type, num_cmd_type, num_resource_bin, self.inst_encoder
+        )
 
         # [TODO] for simpler config
         # self.args.cmd_type_hid_dim = self.conv_encoder.args.other_out_dim
@@ -243,39 +259,52 @@ class Executor(nn.Module):
         if self.executor_rule_emb_size > 0:
             # TODO: Remove num units hardcoding
             self.rule_emb = nn.Embedding(NUM_UNIT_TYPES, self.executor_rule_emb_size)
-            self.rule_lstm = torch.nn.LSTM(self.executor_rule_emb_size, self.executor_rule_emb_size, batch_first=True)
-            self.rule_out = nn.Sequential(nn.Linear(self.executor_rule_emb_size, self.conv_encoder.army_dim + self.conv_encoder.inst_dim))
+            self.rule_lstm = torch.nn.LSTM(
+                self.executor_rule_emb_size,
+                self.executor_rule_emb_size,
+                batch_first=True,
+            )
+            self.rule_out = nn.Sequential(
+                nn.Linear(
+                    self.executor_rule_emb_size,
+                    self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
+                )
+            )
 
         # classifiers
         self.glob_cont_cls = GlobClsHead(
-            self.conv_encoder.glob_dim,
-            self.target_emb_dim,
-            2)
+            self.conv_encoder.glob_dim, self.target_emb_dim, 2
+        )
 
         self.cmd_type_cls = CmdTypeHead(
             self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
             self.conv_encoder.glob_dim - self.conv_encoder.inst_dim,
             self.target_emb_dim,
-            num_cmd_type)
+            num_cmd_type,
+        )
         self.gather_cls = DotGatherHead(
             self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
             self.conv_encoder.resource_dim,
-            0)
+            0,
+        )
         self.attack_cls = DotAttackHead(
             self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
             self.conv_encoder.enemy_dim,
-            0)
+            0,
+        )
         self.move_cls = DotMoveHead(
             self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
             self.conv_encoder.map_dim,
             0,
             x_size,
-            y_size)
+            y_size,
+        )
         self.build_unit_cls = BuildUnitHead(
             self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
             0,
             self.target_emb_dim,
-            num_unit_type)
+            num_unit_type,
+        )
         self.build_building_cls = DotBuildBuildingHead(
             self.conv_encoder.army_dim + self.conv_encoder.inst_dim,
             self.conv_encoder.map_dim,
@@ -283,7 +312,8 @@ class Executor(nn.Module):
             self.target_emb_dim,
             num_unit_type,
             x_size,
-            y_size)
+            y_size,
+        )
 
     def format_executor_input(self, batch, inst, inst_len, inst_cont):
         """convert batch (in c++ format) to input used by executor
@@ -296,38 +326,38 @@ class Executor(nn.Module):
         # assert_eq(inst_cont.dim(), 1)
 
         my_units = {
-            'types': batch['army_type'],
-            'hps': batch['army_hp'],
-            'xs': batch['army_x'],
-            'ys': batch['army_y'],
-            'num_units': batch['num_army'].squeeze(1),
+            "types": batch["army_type"],
+            "hps": batch["army_hp"],
+            "xs": batch["army_x"],
+            "ys": batch["army_y"],
+            "num_units": batch["num_army"].squeeze(1),
         }
         enemy_units = {
-            'types': batch['enemy_type'],
-            'hps': batch['enemy_hp'],
-            'xs': batch['enemy_x'],
-            'ys': batch['enemy_y'],
-            'num_units': batch['num_enemy'].squeeze(1),
+            "types": batch["enemy_type"],
+            "hps": batch["enemy_hp"],
+            "xs": batch["enemy_x"],
+            "ys": batch["enemy_y"],
+            "num_units": batch["num_enemy"].squeeze(1),
         }
         resource_units = {
-            'types': batch['resource_type'],
-            'hps': batch['resource_hp'],
-            'xs': batch['resource_x'],
-            'ys': batch['resource_y'],
-            'num_units': batch['num_resource'].squeeze(1),
+            "types": batch["resource_type"],
+            "hps": batch["resource_hp"],
+            "xs": batch["resource_x"],
+            "ys": batch["resource_y"],
+            "num_units": batch["num_resource"].squeeze(1),
         }
         current_cmds = {
-            'cmd_type': batch['current_cmd_type'],
-            'target_type': batch['current_cmd_unit_type'],
-            'target_x': batch['current_cmd_x'],
-            'target_y': batch['current_cmd_y'],
-            'target_gather_idx': batch['current_cmd_gather_idx'],
-            'target_attack_idx': batch['current_cmd_attack_idx'],
+            "cmd_type": batch["current_cmd_type"],
+            "target_type": batch["current_cmd_unit_type"],
+            "target_x": batch["current_cmd_x"],
+            "target_y": batch["current_cmd_y"],
+            "target_gather_idx": batch["current_cmd_gather_idx"],
+            "target_attack_idx": batch["current_cmd_attack_idx"],
         }
 
         # print('prev cmd for executor: (num units: %d)' % batch['num_army'][0][0].item())
         # print(batch['prev_cmd'][0, :batch['num_army'][0][0].item()])
-        prev_cmds = batch['prev_cmd']
+        prev_cmds = batch["prev_cmd"]
 
         # print('inst:', inst)
         # print('hist inst')
@@ -347,12 +377,13 @@ class Executor(nn.Module):
         # t = time.time()
         hist_inst, hist_inst_len, hist_inst_diff = parse_hist_inst(
             self.inst_dict,
-            batch['hist_inst'],
-            batch['hist_inst_diff'],
+            batch["hist_inst"],
+            batch["hist_inst_diff"],
             inst,
             inst_len,
             inst_cont,
-            is_word_based(self.args.inst_encoder_type))
+            is_word_based(self.args.inst_encoder_type),
+        )
         # print('time for executor format hist:', time.time() - t)
         # print('hist_inst:\n', hist_inst)
         # print('hist_inst_len:\n', hist_inst_len)
@@ -360,22 +391,22 @@ class Executor(nn.Module):
         # print('@@@@@@@@@@')
 
         data = {
-            'inst': inst,
-            'inst_len': inst_len,
-            'hist_inst': hist_inst,
-            'hist_inst_len': hist_inst_len,
-            'hist_inst_diff': hist_inst_diff,
-            'resource_bin': batch['resource_bin'],
-            'my_units': my_units,
-            'enemy_units': enemy_units,
-            'resource_units': resource_units,
-            'prev_cmds': prev_cmds,
-            'current_cmds': current_cmds,
-            'map': batch['map'],
+            "inst": inst,
+            "inst_len": inst_len,
+            "hist_inst": hist_inst,
+            "hist_inst_len": hist_inst_len,
+            "hist_inst_diff": hist_inst_diff,
+            "resource_bin": batch["resource_bin"],
+            "my_units": my_units,
+            "enemy_units": enemy_units,
+            "resource_units": resource_units,
+            "prev_cmds": prev_cmds,
+            "current_cmds": current_cmds,
+            "map": batch["map"],
         }
 
         if self.executor_rule_emb_size > 0:
-            data['rule_tensor'] = batch['rule_tensor']
+            data["rule_tensor"] = batch["rule_tensor"]
 
         return data
 
@@ -390,25 +421,25 @@ class Executor(nn.Module):
         # assert_eq(inst_cont.dim(), 1)
 
         my_units = {
-            'types': batch['army_type'],
-            'hps': batch['army_hp'],
-            'xs': batch['army_x'],
-            'ys': batch['army_y'],
-            'num_units': batch['num_army'].squeeze(1),
+            "types": batch["army_type"],
+            "hps": batch["army_hp"],
+            "xs": batch["army_x"],
+            "ys": batch["army_y"],
+            "num_units": batch["num_army"].squeeze(1),
         }
         enemy_units = {
-            'types': batch['enemy_type'],
-            'hps': batch['enemy_hp'],
-            'xs': batch['enemy_x'],
-            'ys': batch['enemy_y'],
-            'num_units': batch['num_enemy'].squeeze(1),
+            "types": batch["enemy_type"],
+            "hps": batch["enemy_hp"],
+            "xs": batch["enemy_x"],
+            "ys": batch["enemy_y"],
+            "num_units": batch["num_enemy"].squeeze(1),
         }
         resource_units = {
-            'types': batch['resource_type'],
-            'hps': batch['resource_hp'],
-            'xs': batch['resource_x'],
-            'ys': batch['resource_y'],
-            'num_units': batch['num_resource'].squeeze(1),
+            "types": batch["resource_type"],
+            "hps": batch["resource_hp"],
+            "xs": batch["resource_x"],
+            "ys": batch["resource_y"],
+            "num_units": batch["num_resource"].squeeze(1),
         }
         # target_cmds = {
         #     'cmd_type': batch['t_current_cmd_type'],
@@ -419,17 +450,17 @@ class Executor(nn.Module):
         #     'target_attack_idx': batch['t_current_cmd_attack_idx'],
         # }
         current_cmds = {
-            'cmd_type': batch['current_cmd_type'],
-            'target_type': batch['current_cmd_unit_type'],
-            'target_x': batch['current_cmd_x'],
-            'target_y': batch['current_cmd_y'],
-            'target_gather_idx': batch['current_cmd_gather_idx'],
-            'target_attack_idx': batch['current_cmd_attack_idx'],
+            "cmd_type": batch["current_cmd_type"],
+            "target_type": batch["current_cmd_unit_type"],
+            "target_x": batch["current_cmd_x"],
+            "target_y": batch["current_cmd_y"],
+            "target_gather_idx": batch["current_cmd_gather_idx"],
+            "target_attack_idx": batch["current_cmd_attack_idx"],
         }
 
         # print('prev cmd for executor: (num units: %d)' % batch['num_army'][0][0].item())
         # print(batch['prev_cmd'][0, :batch['num_army'][0][0].item()])
-        prev_cmds = batch['prev_cmd']
+        prev_cmds = batch["prev_cmd"]
 
         # print('inst:', inst)
         # print('hist inst')
@@ -449,12 +480,13 @@ class Executor(nn.Module):
         # t = time.time()
         hist_inst, hist_inst_len, hist_inst_diff = parse_hist_inst(
             self.inst_dict,
-            batch['hist_inst'],
-            batch['hist_inst_diff'],
+            batch["hist_inst"],
+            batch["hist_inst_diff"],
             inst,
             inst_len,
             inst_cont,
-            is_word_based(self.args.inst_encoder_type))
+            is_word_based(self.args.inst_encoder_type),
+        )
         # print('time for executor format hist:', time.time() - t)
         # print('hist_inst:\n', hist_inst)
         # print('hist_inst_len:\n', hist_inst_len)
@@ -462,48 +494,55 @@ class Executor(nn.Module):
         # print('@@@@@@@@@@')
 
         data = {
-            'inst': inst,
-            'inst_len': inst_len,
-            'hist_inst': hist_inst,
-            'hist_inst_len': hist_inst_len,
-            'hist_inst_diff': hist_inst_diff,
-            'resource_bin': batch['resource_bin'],
-            'my_units': my_units,
-            'enemy_units': enemy_units,
-            'resource_units': resource_units,
-            'prev_cmds': prev_cmds,
-            'current_cmds': current_cmds,
-            'map': batch['map'],
+            "inst": inst,
+            "inst_len": inst_len,
+            "hist_inst": hist_inst,
+            "hist_inst_len": hist_inst_len,
+            "hist_inst_diff": hist_inst_diff,
+            "resource_bin": batch["resource_bin"],
+            "my_units": my_units,
+            "enemy_units": enemy_units,
+            "resource_units": resource_units,
+            "prev_cmds": prev_cmds,
+            "current_cmds": current_cmds,
+            "map": batch["map"],
         }
         return data
 
     def save(self, model_file):
         torch.save(self.state_dict(), model_file)
-        pickle.dump(self.params, open(model_file + '.params', 'wb'))
+        pickle.dump(self.params, open(model_file + ".params", "wb"))
 
     @classmethod
     def load(cls, model_file):
-        params = pickle.load(open(model_file + '.params', 'rb'))
+        params = pickle.load(open(model_file + ".params", "rb"))
         print(params)
         model = cls(**params)
         model.load_state_dict(torch.load(model_file))
         return model
 
     @classmethod
-    def rl_load(cls, model_file, executor_rule_emb_size=0, inst_dict_path=None):
-        params = pickle.load(open(model_file + '.params', 'rb'))
-        arg_dict = params['args'].__dict__
+    def rl_load(
+        cls,
+        model_file,
+        executor_rule_emb_size=0,
+        inst_dict_path=None,
+        executor_random_init=False,
+    ):
+        print(f"Using executor model file: {model_file}")
+        params = pickle.load(open(model_file + ".params", "rb"))
+        arg_dict = params["args"].__dict__
 
         if inst_dict_path:
             arg_dict["inst_dict_path"] = inst_dict_path
 
         ## Setting all dropouts to 0.0
         for k, v in arg_dict.items():
-            if 'dropout' in k:
+            if "dropout" in k:
                 arg_dict[k] = 0.0
 
         params["executor_rule_emb_size"] = executor_rule_emb_size
-        print(params)
+        # print(params)
         model = cls(**params)
 
         model_dict = torch.load(model_file)
@@ -513,7 +552,11 @@ class Executor(nn.Module):
             print("Executor rule embedding size has been set.")
             strict = False
 
-        model.load_state_dict(model_dict, strict=strict)
+        if not executor_random_init:
+            model.load_state_dict(model_dict, strict=strict)
+        else:
+            print("Randomly initializing executor.")
+
         return model
 
     def forward(self, batch):
@@ -524,70 +567,80 @@ class Executor(nn.Module):
         features = self.conv_encoder(batch)
 
         real_unit_mask, cmd_type_mask = create_loss_masks(
-            batch['my_units']['num_units'],
-            batch['target_cmds']['cmd_type'],
-            self.num_cmd_type
+            batch["my_units"]["num_units"],
+            batch["target_cmds"]["cmd_type"],
+            self.num_cmd_type,
         )
 
         # global continue classfier
-        glob_feat = torch.cat([features['sum_army'],
-                               features['sum_enemy'],
-                               features['sum_resource'],
-                               features['money_feat'],
-                               features['sum_inst']], 1)
-        glob_cont_loss = self.glob_cont_cls.compute_loss(
-            glob_feat, batch['glob_cont']
+        glob_feat = torch.cat(
+            [
+                features["sum_army"],
+                features["sum_enemy"],
+                features["sum_resource"],
+                features["money_feat"],
+                features["sum_inst"],
+            ],
+            1,
         )
+        glob_cont_loss = self.glob_cont_cls.compute_loss(glob_feat, batch["glob_cont"])
 
-        army_inst = torch.cat([features['army_feat'], features['inst_feat']], 2)
+        army_inst = torch.cat([features["army_feat"], features["inst_feat"]], 2)
         # action-arg classifiers
         gather_loss = self.gather_cls.compute_loss(
             army_inst,
-            features['resource_feat'],
+            features["resource_feat"],
             None,
-            batch['resource_units']['num_units'],
-            batch['target_cmds']['target_gather_idx'],
-            cmd_type_mask[:, :, gc.CmdTypes.GATHER.value]
+            batch["resource_units"]["num_units"],
+            batch["target_cmds"]["target_gather_idx"],
+            cmd_type_mask[:, :, gc.CmdTypes.GATHER.value],
         )
         attack_loss = self.attack_cls.compute_loss(
             army_inst,
-            features['enemy_feat'],
-            None,            # glob_feat,
-            batch['enemy_units']['num_units'],
-            batch['target_cmds']['target_attack_idx'],
-            cmd_type_mask[:, :, gc.CmdTypes.ATTACK.value]
+            features["enemy_feat"],
+            None,  # glob_feat,
+            batch["enemy_units"]["num_units"],
+            batch["target_cmds"]["target_attack_idx"],
+            cmd_type_mask[:, :, gc.CmdTypes.ATTACK.value],
         )
         build_building_loss = self.build_building_cls.compute_loss(
             army_inst,
-            features['map_feat'],
-            None,            # glob_feat,
-            batch['target_cmds']['target_type'],
-            batch['target_cmds']['target_x'],
-            batch['target_cmds']['target_y'],
-            cmd_type_mask[:, :, gc.CmdTypes.BUILD_BUILDING.value]
+            features["map_feat"],
+            None,  # glob_feat,
+            batch["target_cmds"]["target_type"],
+            batch["target_cmds"]["target_x"],
+            batch["target_cmds"]["target_y"],
+            cmd_type_mask[:, :, gc.CmdTypes.BUILD_BUILDING.value],
         )
         build_unit_loss, nil_build_logp = self.build_unit_cls.compute_loss(
             army_inst,
-            None,            # glob_feat,
-            batch['target_cmds']['target_type'],
+            None,  # glob_feat,
+            batch["target_cmds"]["target_type"],
             cmd_type_mask[:, :, gc.CmdTypes.BUILD_UNIT.value],
-            include_nil=True
+            include_nil=True,
         )
         move_loss = self.move_cls.compute_loss(
             army_inst,
-            features['map_feat'],
-            None,            # glob_feat,
-            batch['target_cmds']['target_x'],
-            batch['target_cmds']['target_y'],
-            cmd_type_mask[:, :, gc.CmdTypes.MOVE.value]
+            features["map_feat"],
+            None,  # glob_feat,
+            batch["target_cmds"]["target_x"],
+            batch["target_cmds"]["target_y"],
+            cmd_type_mask[:, :, gc.CmdTypes.MOVE.value],
         )
 
         # type loss
-        ctype_context = torch.cat([features['sum_army'],
-                                   features['sum_enemy'],
-                                   features['sum_resource'],
-                                   features['money_feat']], 1)
-        cmd_type_logp = self.cmd_type_cls.compute_prob(army_inst, ctype_context, logp=True)
+        ctype_context = torch.cat(
+            [
+                features["sum_army"],
+                features["sum_enemy"],
+                features["sum_resource"],
+                features["money_feat"],
+            ],
+            1,
+        )
+        cmd_type_logp = self.cmd_type_cls.compute_prob(
+            army_inst, ctype_context, logp=True
+        )
         # cmd_type_logp: [batch, num_unit, num_cmd_type]
 
         # extra continue
@@ -599,20 +652,25 @@ class Executor(nn.Module):
         # print('extra cont logp size:', extra_cont_logp.size())
         # the following hack only works if CONT is the last one
         assert gc.CmdTypes.CONT.value == len(gc.CmdTypes) - 1
-        assert extra_cont_logp.size() == cmd_type_logp[:, :, gc.CmdTypes.CONT.value].size()
+        assert (
+            extra_cont_logp.size() == cmd_type_logp[:, :, gc.CmdTypes.CONT.value].size()
+        )
         cont_logp = log_sum_exp(
-            cmd_type_logp[:, :, gc.CmdTypes.CONT.value], extra_cont_logp)
+            cmd_type_logp[:, :, gc.CmdTypes.CONT.value], extra_cont_logp
+        )
         # cont_logp: [batch, num_unit]
         cmd_type_logp = torch.cat(
-            [cmd_type_logp[:, :, :gc.CmdTypes.CONT.value], cont_logp.unsqueeze(2)], 2)
+            [cmd_type_logp[:, :, : gc.CmdTypes.CONT.value], cont_logp.unsqueeze(2)], 2
+        )
         # cmd_type_logp: [batch, num_unit, num_cmd_type]
         cmd_type_logp = cmd_type_logp.gather(
-            2, batch['target_cmds']['cmd_type'].unsqueeze(2)).squeeze(2)
+            2, batch["target_cmds"]["cmd_type"].unsqueeze(2)
+        ).squeeze(2)
         # cmd_type_logp: [batch, num_unit]
         cmd_type_loss = -(cmd_type_logp * real_unit_mask).sum(1)
 
         # aggregate losses
-        num_my_units_size = batch['my_units']['num_units'].size()
+        num_my_units_size = batch["my_units"]["num_units"].size()
         assert_eq(glob_cont_loss.size(), num_my_units_size)
         assert_eq(cmd_type_loss.size(), num_my_units_size)
         assert_eq(move_loss.size(), num_my_units_size)
@@ -620,26 +678,28 @@ class Executor(nn.Module):
         assert_eq(gather_loss.size(), num_my_units_size)
         assert_eq(build_unit_loss.size(), num_my_units_size)
         assert_eq(build_building_loss.size(), num_my_units_size)
-        unit_loss = (cmd_type_loss
-                     + move_loss
-                     + attack_loss
-                     + gather_loss
-                     + build_unit_loss
-                     + build_building_loss)
+        unit_loss = (
+            cmd_type_loss
+            + move_loss
+            + attack_loss
+            + gather_loss
+            + build_unit_loss
+            + build_building_loss
+        )
 
-        unit_loss = (1 - batch['glob_cont'].float()) * unit_loss
+        unit_loss = (1 - batch["glob_cont"].float()) * unit_loss
         loss = glob_cont_loss + unit_loss
 
         all_loss = {
-            'loss': loss.detach(),
-            'unit_loss': unit_loss.detach(),
-            'cmd_type_loss': cmd_type_loss.detach(),
-            'move_loss': move_loss.detach(),
-            'attack_loss': attack_loss.detach(),
-            'gather_loss': gather_loss.detach(),
-            'build_unit_loss': build_unit_loss.detach(),
-            'build_building_loss': build_building_loss.detach(),
-            'glob_cont_loss': glob_cont_loss.detach()
+            "loss": loss.detach(),
+            "unit_loss": unit_loss.detach(),
+            "cmd_type_loss": cmd_type_loss.detach(),
+            "move_loss": move_loss.detach(),
+            "attack_loss": attack_loss.detach(),
+            "gather_loss": gather_loss.detach(),
+            "build_unit_loss": build_unit_loss.detach(),
+            "build_building_loss": build_building_loss.detach(),
+            "glob_cont_loss": glob_cont_loss.detach(),
         }
 
         if mean:
@@ -654,62 +714,69 @@ class Executor(nn.Module):
         features = self.conv_encoder(batch)
 
         real_unit_mask, cmd_type_mask = create_loss_masks(
-            batch['my_units']['num_units'],
-            batch['target_cmds']['cmd_type'],
-            self.num_cmd_type
+            batch["my_units"]["num_units"],
+            batch["target_cmds"]["cmd_type"],
+            self.num_cmd_type,
         )
 
         # global continue classfier ## TODO: Implement the global continue classifier
 
-        army_inst = torch.cat([features['army_feat'], features['inst_feat']], 2)
+        army_inst = torch.cat([features["army_feat"], features["inst_feat"]], 2)
         # action-arg classifiers
         gather_loss = self.gather_cls.compute_loss(
             army_inst,
-            features['resource_feat'],
+            features["resource_feat"],
             None,
-            batch['resource_units']['num_units'],
-            batch['target_cmds']['target_gather_idx'],
-            cmd_type_mask[:, :, gc.CmdTypes.GATHER.value]
+            batch["resource_units"]["num_units"],
+            batch["target_cmds"]["target_gather_idx"],
+            cmd_type_mask[:, :, gc.CmdTypes.GATHER.value],
         )
         attack_loss = self.attack_cls.compute_loss(
             army_inst,
-            features['enemy_feat'],
-            None,            # glob_feat,
-            batch['enemy_units']['num_units'],
-            batch['target_cmds']['target_attack_idx'],
-            cmd_type_mask[:, :, gc.CmdTypes.ATTACK.value]
+            features["enemy_feat"],
+            None,  # glob_feat,
+            batch["enemy_units"]["num_units"],
+            batch["target_cmds"]["target_attack_idx"],
+            cmd_type_mask[:, :, gc.CmdTypes.ATTACK.value],
         )
         build_building_loss = self.build_building_cls.compute_loss(
             army_inst,
-            features['map_feat'],
-            None,            # glob_feat,
-            batch['target_cmds']['target_type'],
-            batch['target_cmds']['target_x'],
-            batch['target_cmds']['target_y'],
-            cmd_type_mask[:, :, gc.CmdTypes.BUILD_BUILDING.value]
+            features["map_feat"],
+            None,  # glob_feat,
+            batch["target_cmds"]["target_type"],
+            batch["target_cmds"]["target_x"],
+            batch["target_cmds"]["target_y"],
+            cmd_type_mask[:, :, gc.CmdTypes.BUILD_BUILDING.value],
         )
         build_unit_loss, nil_build_logp = self.build_unit_cls.compute_loss(
             army_inst,
-            None,            # glob_feat,
-            batch['target_cmds']['target_type'],
+            None,  # glob_feat,
+            batch["target_cmds"]["target_type"],
             cmd_type_mask[:, :, gc.CmdTypes.BUILD_UNIT.value],
-            include_nil=True
+            include_nil=True,
         )
         move_loss = self.move_cls.compute_loss(
             army_inst,
-            features['map_feat'],
-            None,            # glob_feat,
-            batch['target_cmds']['target_x'],
-            batch['target_cmds']['target_y'],
-            cmd_type_mask[:, :, gc.CmdTypes.MOVE.value]
+            features["map_feat"],
+            None,  # glob_feat,
+            batch["target_cmds"]["target_x"],
+            batch["target_cmds"]["target_y"],
+            cmd_type_mask[:, :, gc.CmdTypes.MOVE.value],
         )
 
         # type loss
-        ctype_context = torch.cat([features['sum_army'],
-                                   features['sum_enemy'],
-                                   features['sum_resource'],
-                                   features['money_feat']], 1)
-        cmd_type_logp = self.cmd_type_cls.compute_prob(army_inst, ctype_context, logp=True)
+        ctype_context = torch.cat(
+            [
+                features["sum_army"],
+                features["sum_enemy"],
+                features["sum_resource"],
+                features["money_feat"],
+            ],
+            1,
+        )
+        cmd_type_logp = self.cmd_type_cls.compute_prob(
+            army_inst, ctype_context, logp=True
+        )
         # cmd_type_logp: [batch, num_unit, num_cmd_type]
 
         # extra continue
@@ -721,50 +788,57 @@ class Executor(nn.Module):
         # print('extra cont logp size:', extra_cont_logp.size())
         # the following hack only works if CONT is the last one
         assert gc.CmdTypes.CONT.value == len(gc.CmdTypes) - 1
-        assert extra_cont_logp.size() == cmd_type_logp[:, :, gc.CmdTypes.CONT.value].size()
+        assert (
+            extra_cont_logp.size() == cmd_type_logp[:, :, gc.CmdTypes.CONT.value].size()
+        )
         cont_logp = log_sum_exp(
-            cmd_type_logp[:, :, gc.CmdTypes.CONT.value], extra_cont_logp)
+            cmd_type_logp[:, :, gc.CmdTypes.CONT.value], extra_cont_logp
+        )
         # cont_logp: [batch, num_unit]
         cmd_type_logp = torch.cat(
-            [cmd_type_logp[:, :, :gc.CmdTypes.CONT.value], cont_logp.unsqueeze(2)], 2)
+            [cmd_type_logp[:, :, : gc.CmdTypes.CONT.value], cont_logp.unsqueeze(2)], 2
+        )
         # cmd_type_logp: [batch, num_unit, num_cmd_type]
         cmd_type_logp = cmd_type_logp.gather(
-            2, batch['target_cmds']['cmd_type'].unsqueeze(2)).squeeze(2)
+            2, batch["target_cmds"]["cmd_type"].unsqueeze(2)
+        ).squeeze(2)
         # cmd_type_logp: [batch, num_unit]
         cmd_type_loss = -(cmd_type_logp * real_unit_mask).sum(1)
 
         # aggregate losses
-        num_my_units_size = batch['my_units']['num_units'].size()
+        num_my_units_size = batch["my_units"]["num_units"].size()
         assert_eq(cmd_type_loss.size(), num_my_units_size)
         assert_eq(move_loss.size(), num_my_units_size)
         assert_eq(attack_loss.size(), num_my_units_size)
         assert_eq(gather_loss.size(), num_my_units_size)
         assert_eq(build_unit_loss.size(), num_my_units_size)
         assert_eq(build_building_loss.size(), num_my_units_size)
-        unit_loss = (cmd_type_loss
-                     + move_loss
-                     + attack_loss
-                     + gather_loss
-                     + build_unit_loss
-                     + build_building_loss)
+        unit_loss = (
+            cmd_type_loss
+            + move_loss
+            + attack_loss
+            + gather_loss
+            + build_unit_loss
+            + build_building_loss
+        )
 
         # unit_loss = cmd_type_loss
         # unit_loss = move_loss + attack_loss
         # unit_loss = build_unit_loss + build_building_loss
         # unit_loss = gather_loss
-        #unit_loss = cmd_type_loss
-        #unit_loss = attack_loss
+        # unit_loss = cmd_type_loss
+        # unit_loss = attack_loss
 
         log_prob = -unit_loss
 
         all_loss = {
-            'unit_loss': unit_loss.detach(),
-            'cmd_type_loss': cmd_type_loss.detach(),
-            'move_loss': move_loss.detach(),
-            'attack_loss': attack_loss.detach(),
-            'gather_loss': gather_loss.detach(),
-            'build_unit_loss': build_unit_loss.detach(),
-            'build_building_loss': build_building_loss.detach(),
+            "unit_loss": unit_loss.detach(),
+            "cmd_type_loss": cmd_type_loss.detach(),
+            "move_loss": move_loss.detach(),
+            "attack_loss": attack_loss.detach(),
+            "gather_loss": gather_loss.detach(),
+            "build_unit_loss": build_unit_loss.detach(),
+            "build_building_loss": build_building_loss.detach(),
         }
 
         return log_prob, all_loss
@@ -773,42 +847,63 @@ class Executor(nn.Module):
         features = self.conv_encoder(batch)
         # army_feat, enemy_feat, resource_feat, glob_feat, map_feat = self.conv_encoder(batch)
 
-        num_army = batch['my_units']['num_units']
-        num_enemy = batch['enemy_units']['num_units']
-        num_resource = batch['resource_units']['num_units']
+        num_army = batch["my_units"]["num_units"]
+        num_enemy = batch["enemy_units"]["num_units"]
+        num_resource = batch["resource_units"]["num_units"]
 
-        glob_feat = torch.cat([features['sum_army'],
-                               features['sum_enemy'],
-                               features['sum_resource'],
-                               features['money_feat'],
-                               features['sum_inst']], 1)
+        glob_feat = torch.cat(
+            [
+                features["sum_army"],
+                features["sum_enemy"],
+                features["sum_resource"],
+                features["money_feat"],
+                features["sum_inst"],
+            ],
+            1,
+        )
         # prob is omitted in variable names
         glob_cont = self.glob_cont_cls.compute_prob(glob_feat)
         # glob_cont = glob_cont[:, 1]
 
-        army_inst = torch.cat([features['army_feat'], features['inst_feat']], 2)
-        ctype_context = torch.cat([features['sum_army'],
-                                   features['sum_enemy'],
-                                   features['sum_resource'],
-                                   features['money_feat']], 1)
+        army_inst = torch.cat([features["army_feat"], features["inst_feat"]], 2)
+        ctype_context = torch.cat(
+            [
+                features["sum_army"],
+                features["sum_enemy"],
+                features["sum_resource"],
+                features["money_feat"],
+            ],
+            1,
+        )
 
         rule_emb = None
         if "rule_tensor" in batch:
             assert self.executor_rule_emb_size > 0
-            rule_emb = self.rule_emb(batch['rule_tensor'])
+            rule_emb = self.rule_emb(batch["rule_tensor"])
             output, (rule_feat, _) = self.rule_lstm(rule_emb)
-            rule_out = self.rule_out(output[:, -1]).unsqueeze(1).expand(-1, army_inst.size(1), -1)
-            army_inst = torch.nn.functional.relu(rule_out*army_inst)
+            rule_out = (
+                self.rule_out(output[:, -1])
+                .unsqueeze(1)
+                .expand(-1, army_inst.size(1), -1)
+            )
+            army_inst = rule_out + army_inst
 
-        cmd_type = self.cmd_type_cls.compute_prob(army_inst, ctype_context, rule_emb=None)
+        cmd_type = self.cmd_type_cls.compute_prob(
+            army_inst, ctype_context, rule_emb=None
+        )
         gather_idx = self.gather_cls.compute_prob(
-            army_inst, features['resource_feat'], None, num_resource, rule_emb=None)
+            army_inst, features["resource_feat"], None, num_resource, rule_emb=None
+        )
         attack_idx = self.attack_cls.compute_prob(
-            army_inst, features['enemy_feat'], None, num_enemy, rule_emb=None)
+            army_inst, features["enemy_feat"], None, num_enemy, rule_emb=None
+        )
         unit_type = self.build_unit_cls.compute_prob(army_inst, None, rule_emb=None)
         building_type, building_loc = self.build_building_cls.compute_prob(
-            army_inst, features['map_feat'], None, rule_emb=None)
-        move_loc = self.move_cls.compute_prob(army_inst, features['map_feat'], None, rule_emb=None)
+            army_inst, features["map_feat"], None, rule_emb=None
+        )
+        move_loc = self.move_cls.compute_prob(
+            army_inst, features["map_feat"], None, rule_emb=None
+        )
 
         # for i in range(num_army[0]):
         #     print('Unit type:', batch['my_units']['types'][0][i].item())
@@ -827,16 +922,17 @@ class Executor(nn.Module):
 
         batchsize = num_army.size(0)
         probs = {
-            'glob_cont_prob': glob_cont,
-            'cmd_type_prob': cmd_type,
-            'gather_idx_prob': gather_idx,
-            'attack_idx_prob': attack_idx,
-            'unit_type_prob': unit_type,
-            'building_type_prob': building_type,
-            'building_loc_prob': building_loc,
-            'move_loc_prob': move_loc,
+            "glob_cont_prob": glob_cont,
+            "cmd_type_prob": cmd_type,
+            "gather_idx_prob": gather_idx,
+            "attack_idx_prob": attack_idx,
+            "unit_type_prob": unit_type,
+            "building_type_prob": building_type,
+            "building_loc_prob": building_loc,
+            "move_loc_prob": move_loc,
         }
         return probs
+
 
 def compute_log_prob(batch, executor_reply):
     log_probs = {}
@@ -855,6 +951,5 @@ def compute_log_prob(batch, executor_reply):
 
         log_probs["log_" + name] = log_prob.sum(1)
         log_prob_sum += log_probs["log_" + name]
-
 
     return log_prob_sum, log_probs

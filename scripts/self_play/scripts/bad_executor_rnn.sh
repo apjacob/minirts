@@ -23,10 +23,10 @@ python train_executor.py \
   --inst_hid_dim 128 \
   --inst_encoder_type lstm \
   --model_folder saved_models/executor_rnn \
-  --batch_size 128 \
+  --batch_size 64 \
   --gpu 0 \
   --grad_clip 0.5 \
-  --lr 0.002 \
+  --lr 0.001 \
   --optim adamax \
   --epochs 5 \
   --use_hist_inst 1 \

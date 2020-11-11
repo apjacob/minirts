@@ -6,7 +6,7 @@ import itertools
 from utils import SLURM_TEMPLATE, create_dir
 
 SAVE_DIR = "/home/gridsan/apjacob/sweeps"
-JOB_SWEEP_NAME = "multitask_fixed_sweep_final_set"
+JOB_SWEEP_NAME = "multitask_fixed_sweep_261020"
 
 time = time.strftime("%Y%m%d-%H%M%S")
 job_output_dir = os.path.join(SAVE_DIR, f"{JOB_SWEEP_NAME}-{time}")
@@ -20,40 +20,35 @@ exp_tuple_list = [
     (80, "rnn", "both"),
     (80, "rnn", "both"),
     (80, "rnn", "executor"),
+    (80, "rnn", "executor"),
+    (80, "rnn", "executor"),
     (80, "zero", "executor"),
-    (14, "rnn", "both"),
-    (14, "rnn", "both"),
-    (21, "rnn", "both"),
-    (21, "rnn", "both"),
-    (3, "rnn", "executor"),
-    (3, "zero", "executor"),
-    (3, "rnn", "executor"),
-    (3, "zero", "executor"),
-    (3, "rnn", "both"),
-    (3, "rnn", "both"),
+    (80, "zero", "executor"),
+    (80, "zero", "executor"),
     (80, "rnn", "coach"),
     (80, "rnn", "coach"),
-    (12, "rnn", "both"),
-    (12, "rnn", "both"),
-    (12, "rnn", "coach"),
-    (12, "rnn", "coach"),
-    (12, "rnn", "executor"),
-    (12, "rnn", "executor"),
-    (12, "zero", "executor"),
-    (12, "zero", "executor"),
-    (7, "rnn", "both"),
-    (7, "rnn", "both"),
-    (7, "rnn", "both"),
-    (7, "rnn", "both"),
-    (14, "rnn", "both"),
-    (14, "rnn", "both"),
-    (14, "rnn", "both"),
-    (14, "rnn", "both"),
+    (80, "rnn", "coach"),
+    (80, "rnn", "coach"),
+    (21, "rnn", "coach"),
+    (21, "rnn", "coach"),
+    (21, "rnn", "coach"),
+    (21, "rnn", "executor"),
+    (21, "rnn", "executor"),
+    (21, "rnn", "executor"),
+    (3, "rnn", "both"),
+    (3, "rnn", "both"),
+    (3, "rnn", "both"),
 ]
 
 
 for rule, rnn, train_mode in exp_tuple_list:
-    job_name = f"rule-{rule}-rnns-{rnn}-train_mode-{train_mode}"
+
+    if train_mode == "both" or train_mode == "executor":
+        lr = 6e-6
+    else:
+        lr = 1e-6
+
+    job_name = f"rule-{rule}-rnns-{rnn}-train_mode-{train_mode}-lr-{lr}"
     job_file_name = os.path.join(job_output_dir, f"{job_name}.job")
     job_log_file = os.path.join(job_output_dir, f"{job_name}.log")
     if rnn == "zero" and train_mode != "executor":

@@ -6,7 +6,7 @@ import itertools
 from utils import SLURM_TEMPLATE, create_dir
 
 SAVE_DIR = "/home/gridsan/apjacob/sweeps"
-JOB_SWEEP_NAME = "multitask_fixed_sweep_final_set"
+JOB_SWEEP_NAME = "multitask_fixed_sweep_191020"
 
 time = time.strftime("%Y%m%d-%H%M%S")
 job_output_dir = os.path.join(SAVE_DIR, f"{JOB_SWEEP_NAME}-{time}")
@@ -20,35 +20,24 @@ exp_tuple_list = [
     (80, "rnn", "both"),
     (80, "rnn", "both"),
     (80, "rnn", "executor"),
+    (80, "rnn", "executor"),
+    (80, "rnn", "executor"),
     (80, "zero", "executor"),
-    (14, "rnn", "both"),
-    (14, "rnn", "both"),
-    (21, "rnn", "both"),
-    (21, "rnn", "both"),
-    (3, "rnn", "executor"),
-    (3, "zero", "executor"),
-    (3, "rnn", "executor"),
-    (3, "zero", "executor"),
-    (3, "rnn", "both"),
-    (3, "rnn", "both"),
+    (80, "zero", "executor"),
+    (80, "zero", "executor"),
     (80, "rnn", "coach"),
     (80, "rnn", "coach"),
-    (12, "rnn", "both"),
-    (12, "rnn", "both"),
-    (12, "rnn", "coach"),
-    (12, "rnn", "coach"),
-    (12, "rnn", "executor"),
-    (12, "rnn", "executor"),
-    (12, "zero", "executor"),
-    (12, "zero", "executor"),
-    (7, "rnn", "both"),
-    (7, "rnn", "both"),
-    (7, "rnn", "both"),
-    (7, "rnn", "both"),
-    (14, "rnn", "both"),
-    (14, "rnn", "both"),
-    (14, "rnn", "both"),
-    (14, "rnn", "both"),
+    (80, "rnn", "coach"),
+    (80, "rnn", "coach"),
+    (21, "rnn", "coach"),
+    (21, "rnn", "coach"),
+    (21, "rnn", "coach"),
+    (21, "rnn", "executor"),
+    (21, "rnn", "executor"),
+    (21, "rnn", "executor"),
+    (3, "rnn", "both"),
+    (3, "rnn", "both"),
+    (3, "rnn", "both"),
 ]
 
 
@@ -71,7 +60,7 @@ for rule, rnn, train_mode in exp_tuple_list:
         "--tb_log 1 "
         "--save_folder /home/gridsan/apjacob/save "
         "--rule_dir /home/gridsan/apjacob/minirts/scripts/self_play/rules/ "
-        "--wandb_dir /home/gridsan/apjacob/wandb/ "
+        "--wandb_dir /home/gridsan/apjacob/minirts/wandb/ "
         "--pg ppo --ppo_epochs 4 --train_batch_size 32 "
         f"--num_rb=25 --num_sp=0 --train_mode={train_mode} "
         f"--rule {rule} > {job_log_file}"

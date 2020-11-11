@@ -440,8 +440,7 @@ void AggregatedCmdReply::writeCmds(
             std::cout << "Warning: no resource to gather" << std::endl;
           }
         } else {
-          std::cout << "Error: gather invalid idx" << std::endl;
-          assert(false);
+          std::cout << "Warning: gather invalid idx" << std::endl;
         }
         continue;
       }
@@ -454,8 +453,7 @@ void AggregatedCmdReply::writeCmds(
             std::cout << "Warning: no enemy to attack" << std::endl;
           }
         } else {
-          std::cout << "Error: attack invalid idx" << std::endl;
-          assert(false);
+          std::cout << "Warning: attack invalid idx" << std::endl;
         }
         continue;
       }
