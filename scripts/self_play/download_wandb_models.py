@@ -163,6 +163,9 @@ def self_play(args):
                 )
                 num_sub_exps += 1
 
+                if sub_exp_name == "bc-bc" or sub_exp_name == "random-bc":
+                    break
+
             sub_exp_result_dict[sub_exp_name] = {
                 "model_paths": model_paths,
             }

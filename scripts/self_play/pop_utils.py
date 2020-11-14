@@ -15,32 +15,9 @@ base_model_dicts = {
             "rule": 80,
             "best_coach": os.path.join(model_root, "coach_rnn500.pt"),
             "best_exec": os.path.join(model_root, "executor_rnn.pt"),
-        },
-        {
-            "cloned": True,
-            "rule": 80,
-            "best_coach": os.path.join(model_root, "coach_rnn500.pt"),
-            "best_exec": os.path.join(model_root, "executor_rnn.pt"),
-        },
-        {
-            "cloned": True,
-            "rule": 80,
-            "best_coach": os.path.join(model_root, "coach_rnn500.pt"),
-            "best_exec": os.path.join(model_root, "executor_rnn.pt"),
-        },
-        {
-            "cloned": True,
-            "rule": 80,
-            "best_coach": os.path.join(model_root, "coach_rnn500.pt"),
-            "best_exec": os.path.join(model_root, "executor_rnn.pt"),
-        },
-        {
-            "cloned": True,
-            "rule": 80,
-            "best_coach": os.path.join(model_root, "coach_rnn500.pt"),
-            "best_exec": os.path.join(model_root, "executor_rnn.pt"),
-        },
-    ],
+        }
+    ]
+    * 20,
     "bc_zero": [
         {
             "cloned": True,
@@ -189,7 +166,7 @@ base_model_dicts = {
     ],
 }
 
-NUM_TRIALS = 10
+NUM_TRIALS = 15
 
 
 def populate_fixed_model_dicts():
@@ -276,7 +253,7 @@ def populate_pop_model_dicts():
     )
 
     # Filter out iterations less than K
-    trained_models_df = full_results_df
+    trained_models_df = full_results_df[(full_results_df["max_iterations"] >= 1700)]
 
     for _, row in trained_models_df.iterrows():
         rule_series = (

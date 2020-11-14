@@ -131,6 +131,7 @@ def parse_args():
         "--rule_series", nargs="+", help="series of rules", required=True
     )
     parser.add_argument("--coach_random_init", type=bool, default=False)
+    parser.add_argument("--split_train", type=bool, default=False)
     args = parser.parse_args()
 
     return args
@@ -235,18 +236,21 @@ def self_play(args):
 
     cur_iter_idx = 1
     rules = [int(str_rule) for str_rule in args.rule_series]
+    agg_agents = []
+    agg_win_batches = defaultdict(dict)
+    agg_loss_batches = defaultdict(dict)
 
     for epoch in range(args.train_epochs):
         for rule_idx in rules:
 
-            if epoch % args.eval_factor == 0:
-                for eval_rule_idx in rules:
-                    sp_agent = agent_dict[eval_rule_idx]["sp_agent"]
-                    bc_agent = agent_dict[eval_rule_idx]["bc_agent"]
-                    game = MultiTaskGame(
-                        sp_agent, bc_agent, cur_iter_idx, args, working_rule_dir
-                    )
-                    game.evaluate_lifelong_rules(cur_iter_idx, [eval_rule_idx], "train")
+            # if epoch % args.eval_factor == 0:
+            #     for eval_rule_idx in rules:
+            #         sp_agent = agent_dict[eval_rule_idx]["sp_agent"]
+            #         bc_agent = agent_dict[eval_rule_idx]["bc_agent"]
+            #         game = MultiTaskGame(
+            #             sp_agent, bc_agent, cur_iter_idx, args, working_rule_dir
+            #         )
+            #         game.evaluate_lifelong_rules(cur_iter_idx, [eval_rule_idx], "train")
 
             sp_agent = agent_dict[rule_idx]["sp_agent"]
             bc_agent = agent_dict[rule_idx]["bc_agent"]
@@ -292,20 +296,56 @@ def self_play(args):
                     game.set_reply(key, reply)
                     pbar.update(t_count)
 
-            if args.train_mode == "coach":
-                agent1.train_coach(cur_iter_idx)
-            elif args.train_mode == "executor":
-                agent1.train_executor(cur_iter_idx)
-            elif args.train_mode == "both":
-                agent1.train_both(cur_iter_idx)
+            if not args.split_train:
+                if args.train_mode == "coach":
+                    agent1.train_coach(cur_iter_idx)
+                elif args.train_mode == "executor":
+                    agent1.train_executor(cur_iter_idx)
+                elif args.train_mode == "both":
+                    agent1.train_both(cur_iter_idx)
+                else:
+                    raise Exception("Invalid train mode.")
+                game.print_logs(cur_iter_idx)
+                game.terminate()
             else:
-                raise Exception("Invalid train mode.")
 
-            game.print_logs(cur_iter_idx)
-            cur_iter_idx += 1
-            wandb.run.summary[f"max_iterations"] = cur_iter_idx
-            pbar.close()
-            game.terminate()
+                if cur_iter_idx % len(rules):
+                    win_batches, loss_batches = agent1.train_coach(cur_iter_idx)
+                    agg_win_batches.update(win_batches)
+                    agg_loss_batches.update(loss_batches)
+                    agg_agents.append((agent1, agent2))
+                    game.print_logs(cur_iter_idx)
+                    game.terminate(keep_agents=True)
+
+                else:
+                    win_batches, loss_batches = agent1.train_coach(cur_iter_idx)
+
+                    agg_win_batches.update(win_batches)
+                    agg_loss_batches.update(loss_batches)
+
+                    # Change shuffling
+                    agent1.train_executor(
+                        cur_iter_idx,
+                        agg_win_batches=agg_win_batches,
+                        agg_loss_batches=agg_loss_batches,
+                    )
+
+                    for agent1, agent2 in agg_agents:
+                        agent1.reset()
+                        agent2.reset()
+
+                    game.print_logs(cur_iter_idx)
+                    game.terminate()
+
+                    del agg_loss_batches
+                    del agg_win_batches
+
+                    agg_win_batches = defaultdict(dict)
+                    agg_loss_batches = defaultdict(dict)
+
+                cur_iter_idx += 1
+                wandb.run.summary[f"max_iterations"] = cur_iter_idx
+                pbar.close()
 
         del game
 

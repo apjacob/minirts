@@ -493,6 +493,9 @@ def self_play(args):
             num_sub_exps = 0
             win_rates = []
             num_total_sub_exps = min(len(coaches), len(execs))
+            if sub_exp_name == "random-bc" or sub_exp_name == "bc-bc":
+                num_total_sub_exps = 1
+
             for (coach, executor) in zip(
                 coaches, execs
             ):  ## Do we want to check if coaches == execs?
@@ -601,6 +604,9 @@ def self_play(args):
 
                 win_rates.append(win_rate * 100)
                 num_sub_exps += 1
+
+                if sub_exp_name == "bc-bc" or sub_exp_name == "random-bc":
+                    break
 
             sub_exp_result_dict[sub_exp_name] = {
                 "win_rate": win_rates,

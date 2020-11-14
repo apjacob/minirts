@@ -64,6 +64,14 @@ class Agent:
 
         print("Using pg {} algorithm".format(args.pg))
         if self.__trainable:
+            # if args.split_train:
+            #     self.executor_optimizer = optim.Adam(
+            #         self.model.executor.parameters(), lr=args.lr
+            #     )
+            #     self.coach_optimizer = optim.Adam(
+            #         self.model.coach.parameters(), lr=args.lr
+            #     )
+            # else:
             self.optimizer = optim.Adam(self.model.parameters(), lr=args.lr)
             self.sa_buffer = StateActionBuffer(
                 max_buffer_size=args.max_table_size, buffer_add_prob=args.sampling_freq
@@ -296,15 +304,21 @@ class Agent:
                 else:
                     elements[key] = element[:-1]
 
-    def train_executor(self, gen_id):
+    def train_executor(self, gen_id, agg_win_batches=None, agg_loss_batches=None):
         assert self.__trainable
         assert self.args.sampling_freq >= 1.0
 
-        if len(self.sa_buffer):
-
-            win_batches, loss_batches = self.sa_buffer.pop(self.result_dict)
+        if len(self.sa_buffer) or (
+            agg_win_batches is not None and agg_loss_batches is not None
+        ):
             # self.align_executor_actions(win_batches)
             # self.align_executor_actions(loss_batches)
+
+            if agg_loss_batches is not None and agg_win_batches is not None:
+                win_batches = agg_win_batches
+                loss_batches = agg_loss_batches
+            else:
+                win_batches, loss_batches = self.sa_buffer.pop(self.result_dict)
 
             if self.pg == "vanilla":
                 l1_loss, mse_loss, value = self.__update_executor_vanilla(
@@ -314,15 +328,17 @@ class Agent:
                 if self.tb_log:
                     wandb.log(
                         {
-                            "Loss/RL-Loss": l1_loss,
-                            "Loss/MSE-Loss": mse_loss,
-                            "Value": value,
+                            "Loss/Executor/RL-Loss": l1_loss,
+                            "Loss/Executor/MSE-Loss": mse_loss,
+                            "Loss/Executor/Value": value,
                         },
                         step=gen_id,
                     )
-                    self.tb_writer.add_scalar("Loss/RL-Loss", l1_loss, gen_id)
-                    self.tb_writer.add_scalar("Loss/MSE-Loss", mse_loss, gen_id)
-                    self.tb_writer.add_scalar("Value", value, gen_id)
+                    self.tb_writer.add_scalar("Loss/Executor/RL-Loss", l1_loss, gen_id)
+                    self.tb_writer.add_scalar(
+                        "Loss/Executor/MSE-Loss", mse_loss, gen_id
+                    )
+                    self.tb_writer.add_scalar("Loss/Executor/Value", value, gen_id)
 
             elif self.pg == "ppo":
                 action_loss, value_loss, entropy = self.__update_executor_ppo(
@@ -332,16 +348,20 @@ class Agent:
                 if self.tb_log:
                     wandb.log(
                         {
-                            "Loss/Action-Loss": action_loss,
-                            "Loss/Value-Loss": value_loss,
-                            "Loss/Entropy": entropy,
+                            "Loss/Executor/Action-Loss": action_loss,
+                            "Loss/Executor/Value-Loss": value_loss,
+                            "Loss/Executor/Entropy": entropy,
                         },
                         step=gen_id,
                     )
 
-                    self.tb_writer.add_scalar("Loss/Action-Loss", action_loss, gen_id)
-                    self.tb_writer.add_scalar("Loss/Value-Loss", value_loss, gen_id)
-                    self.tb_writer.add_scalar("Loss/Entropy", entropy, gen_id)
+                    self.tb_writer.add_scalar(
+                        "Loss/Executor/Action-Loss", action_loss, gen_id
+                    )
+                    self.tb_writer.add_scalar(
+                        "Loss/Executor/Value-Loss", value_loss, gen_id
+                    )
+                    self.tb_writer.add_scalar("Loss/Executor/Entropy", entropy, gen_id)
             else:
                 raise NotImplementedError
         else:
@@ -504,16 +524,16 @@ class Agent:
                 if self.tb_log:
                     wandb.log(
                         {
-                            "Loss/Action-Loss": l1_loss,
-                            "Loss/Value-Loss": mse_loss,
-                            "Loss/Value": value,
+                            "Loss/Coach/Action-Loss": l1_loss,
+                            "Loss/Coach/Value-Loss": mse_loss,
+                            "Loss/Coach/Value": value,
                         },
                         step=gen_id,
                     )
 
-                    self.tb_writer.add_scalar("Loss/Action-Loss", l1_loss, gen_id)
-                    self.tb_writer.add_scalar("Loss/Value-Loss", mse_loss, gen_id)
-                    self.tb_writer.add_scalar("Loss/Value", value, gen_id)
+                    self.tb_writer.add_scalar("Loss/Coach/Action-Loss", l1_loss, gen_id)
+                    self.tb_writer.add_scalar("Loss/Coach/Value-Loss", mse_loss, gen_id)
+                    self.tb_writer.add_scalar("Loss/Coach/Value", value, gen_id)
 
             elif self.pg == "ppo":
                 action_loss, value_loss, entropy = self.__update_coach_ppo(
@@ -523,16 +543,21 @@ class Agent:
                 if self.tb_log:
                     wandb.log(
                         {
-                            "Loss/Action-Loss": action_loss,
-                            "Loss/Value-Loss": value_loss,
-                            "Loss/Entropy": entropy,
+                            "Loss/Coach/Action-Loss": action_loss,
+                            "Loss/Coach/Value-Loss": value_loss,
+                            "Loss/Coach/Entropy": entropy,
                         },
                         step=gen_id,
                     )
 
-                    self.tb_writer.add_scalar("Loss/Action-Loss", action_loss, gen_id)
-                    self.tb_writer.add_scalar("Loss/Value-Loss", value_loss, gen_id)
-                    self.tb_writer.add_scalar("Loss/Entropy", entropy, gen_id)
+                    self.tb_writer.add_scalar(
+                        "Loss/Coach/Action-Loss", action_loss, gen_id
+                    )
+                    self.tb_writer.add_scalar(
+                        "Loss/Coach/Value-Loss", value_loss, gen_id
+                    )
+                    self.tb_writer.add_scalar("Loss/Coach/Entropy", entropy, gen_id)
+                    return win_batches, loss_batches
             else:
                 raise NotImplementedError
 
@@ -692,15 +717,15 @@ class Agent:
                 if self.tb_log:
                     wandb.log(
                         {
-                            "Loss/RL-Loss": l1_loss,
-                            "Loss/MSE-Loss": mse_loss,
-                            "Value": value,
+                            "Loss/Both/RL-Loss": l1_loss,
+                            "Loss/Both/MSE-Loss": mse_loss,
+                            "Loss/Both/Value": value,
                         },
                         step=gen_id,
                     )
-                    self.tb_writer.add_scalar("Loss/RL-Loss", l1_loss, gen_id)
-                    self.tb_writer.add_scalar("Loss/MSE-Loss", mse_loss, gen_id)
-                    self.tb_writer.add_scalar("Value", value, gen_id)
+                    self.tb_writer.add_scalar("Loss/Both/RL-Loss", l1_loss, gen_id)
+                    self.tb_writer.add_scalar("Loss/Both/MSE-Loss", mse_loss, gen_id)
+                    self.tb_writer.add_scalar("Loss/Both/Value", value, gen_id)
 
             elif self.pg == "ppo":
                 action_loss, value_loss, entropy = self.__update_both_ppo(
@@ -710,16 +735,20 @@ class Agent:
                 if self.tb_log:
                     wandb.log(
                         {
-                            "Loss/Action-Loss": action_loss,
-                            "Loss/Value-Loss": value_loss,
-                            "Loss/Entropy": entropy,
+                            "Loss/Both/Action-Loss": action_loss,
+                            "Loss/Both/Value-Loss": value_loss,
+                            "Loss/Both/Entropy": entropy,
                         },
                         step=gen_id,
                     )
 
-                    self.tb_writer.add_scalar("Loss/Action-Loss", action_loss, gen_id)
-                    self.tb_writer.add_scalar("Loss/Value-Loss", value_loss, gen_id)
-                    self.tb_writer.add_scalar("Loss/Entropy", entropy, gen_id)
+                    self.tb_writer.add_scalar(
+                        "Loss/Both/Action-Loss", action_loss, gen_id
+                    )
+                    self.tb_writer.add_scalar(
+                        "Loss/Both/Value-Loss", value_loss, gen_id
+                    )
+                    self.tb_writer.add_scalar("Loss/Both/Entropy", entropy, gen_id)
             else:
                 raise NotImplementedError
         else:
