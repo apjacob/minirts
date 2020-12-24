@@ -20,7 +20,7 @@ from rnn_coach import ConvRnnCoach
 from onehot_coach import ConvOneHotCoach
 from rnn_generator import RnnGenerator
 from itertools import groupby
-from executor_wrapper import ExecutorWrapper
+from executor_wrapper import ExecutorWrapper, MultiExecutorWrapper
 from executor import Executor
 from common_utils import to_device, ResultStat, Logger
 from best_models import best_executors, best_coaches
@@ -86,6 +86,9 @@ class Agent:
     @property
     def executor(self):
         return self.__executor
+
+    def set_optimizer(self, optimizer):
+        self.optimizer = optimizer
 
     @property
     def coach(self):
@@ -876,6 +879,73 @@ class Agent:
 
         self.model.train()
         return action_loss_mean, value_loss_mean, entropy_mean
+
+
+class MultiExecutorAgent(Agent):
+    def __init__(
+        self,
+        coach,
+        executors,
+        device,
+        args,
+        writer,
+        trainable=False,
+        exec_sample=False,
+        pg="ppo",
+        tag="",
+    ):
+        super().__init__(
+            coach, executors, device, args, writer, trainable, exec_sample, pg, tag
+        )
+
+    def simulate(self, index, batch):
+        with torch.no_grad():
+            reply, coach_reply, replies = self.model.forward(batch, self.exec_sample)
+
+            return reply, replies
+
+    def load_model(self, coach_path, executor_paths, args):
+        coach_rule_emb_size = getattr(args, "coach_rule_emb_size", 0)
+        executor_rule_emb_size = getattr(args, "executor_rule_emb_size", 0)
+        inst_dict_path = getattr(args, "inst_dict_path", None)
+        coach_random_init = getattr(args, "coach_random_init", False)
+
+        assert isinstance(executor_paths, dict)
+
+        if isinstance(coach_path, str):
+            if "onehot" in coach_path:
+                coach = ConvOneHotCoach.load(coach_path).to(self.device)
+            elif "gen" in coach_path:
+                coach = RnnGenerator.load(coach_path).to(self.device)
+            else:
+                coach = ConvRnnCoach.rl_load(
+                    coach_path,
+                    coach_rule_emb_size,
+                    inst_dict_path,
+                    coach_random_init=coach_random_init,
+                ).to(self.device)
+        else:
+            print("Sharing coaches.")
+            coach = coach_path
+        coach.max_raw_chars = args.max_raw_chars
+
+        executors = {}
+        for k, executor_path in executor_paths.items():
+            executor = Executor.rl_load(
+                executor_path, executor_rule_emb_size, inst_dict_path
+            ).to(self.device)
+            executors[k] = executor
+
+        executor_wrapper = MultiExecutorWrapper(
+            coach,
+            executors,
+            coach.num_instructions,
+            args.max_raw_chars,
+            args.cheat,
+            args.inst_mode,
+        )
+        executor_wrapper.train(False)
+        return executor_wrapper
 
 
 def run_eval(args, model1, model2, device, num_games=100):

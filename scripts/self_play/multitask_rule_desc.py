@@ -37,11 +37,76 @@ from best_models import best_executors, best_coaches
 from tqdm import tqdm
 from game import *
 import wandb
-from pop_utils import model_dicts
+
+model_dicts = {
+    "both_finetuned_rule80": {
+        "rule": 80,
+        "model": "decent-bush-217",
+        "run_path": "apjacob/adapt-minirts/250vw2ty",
+        "best_exec": "best_exec_checkpoint_421.pt",
+        "best_coach": "best_coach_checkpoint_421.pt",
+    },
+    "both_finetuned_rule12": {
+        "rule": 12,
+        "model": "sandy-forest-196",
+        "run_path": "apjacob/adapt-minirts/1zk0an30",
+        "best_exec": "best_exec_checkpoint_1841.pt",
+        "best_coach": "best_coach_checkpoint_1841.pt",
+    },
+    "both_finetuned_rule7": {
+        "rule": 7,
+        "model": "vibrant-monkey-195",
+        "run_path": "apjacob/adapt-minirts/1czxzs7k",
+        "best_exec": "best_exec_checkpoint_581.pt",
+        "best_coach": "best_coach_checkpoint_581.pt",
+    },
+    "hier_exec_finetuned_rule80": {
+        "rule": 80,
+        "model": "smooth-silence-209",
+        "run_path": "apjacob/adapt-minirts/3e2vpwt1",
+        "best_exec": "best_exec_checkpoint_1501.pt",
+        "best_coach": "best_coach_checkpoint_1501.pt",
+    },
+    "hier_exec_finetuned_rule21": {
+        "rule": 21,
+        "model": "glowing-violet-207",
+        "run_path": "apjacob/adapt-minirts/33hm1jco",
+        "best_exec": "best_exec_checkpoint_1381.pt",
+        "best_coach": "best_coach_checkpoint_1381.pt",
+    },
+    "hier_exec_finetuned_rule14": {
+        "rule": 14,
+        "model": "multitask-fixed_selfplay-exec14-1aqqm60r-",
+        "run_path": "apjacob/adapt-minirts/1aqqm60r",
+        "best_exec": "best_exec_checkpoint_1821.pt",
+        "best_coach": "best_coach_checkpoint_1821.pt",
+    },
+    "hier_coach_finetuned_rule21": {
+        "rule": 21,
+        "model": "icy-deluge-205",
+        "run_path": "apjacob/adapt-minirts/2w738s03",
+        "best_exec": "best_exec_checkpoint_1901.pt",
+        "best_coach": "best_coach_checkpoint_1901.pt",
+    },
+    "hier_coach_finetuned_rule80": {
+        "rule": 80,
+        "model": "dark-vortex-212",
+        "run_path": "apjacob/adapt-minirts/1e4cctnv",
+        "best_exec": "best_exec_checkpoint_1141.pt",
+        "best_coach": "best_coach_checkpoint_1141.pt",
+    },
+    "both_finetuned_rule3": {
+        "rule": 3,
+        "model": "glorious-plasma-197",
+        "run_path": "apjacob/adapt-minirts/1iy0lk2d",
+        "best_exec": "best_exec_checkpoint_1921.pt",
+        "best_coach": "best_coach_checkpoint_1921.pt",
+    },
+}
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Multitask eval play")
+    parser = argparse.ArgumentParser(description="Multitask eval play interpretability")
     parser.add_argument("--seed", type=int, default=777)
 
     parser.add_argument("--num_sp", type=int, default=0)
@@ -130,76 +195,34 @@ def parse_args():
     parser.add_argument(
         "--exec_load_file", type=str, default="/raid/lingo/apjacob/minirts/save/"
     )
-    # parser.add_argument(
-    #     "--model",
-    #     choices=[
-    #         "both_finetuned_rule80",
-    #         "both_finetuned_rule3",
-    #         "behaviour_cloned",
-    #         "hier_exec_finetuned_rule21",
-    #         "hier_exec_finetuned_rule80",
-    #         "both_finetuned_rule12",
-    #         "both_finetuned_rule7",
-    #         "hier_exec_finetuned_rule14",
-    #         "both_finetuned_rule3",
-    #         "hier_coach_finetuned_rule80",
-    #         "hier_coach_finetuned_rule21",
-    #         "pop_finetuned_rule80",
-    #         "pop_finetuned_rule3",
-    #         "pop_finetuned_rule13",
-    #         "pop_finetuned_rule12",
-    #     ],
-    #     default="both_finetuned_rule80",
-    # )
+    parser.add_argument(
+        "--model",
+        choices=[
+            "both_finetuned_rule80",
+            "both_finetuned_rule3",
+            "behaviour_cloned",
+            "both_finetuned_rule7",
+            "both_finetuned_rule14",
+            "both_finetuned_rule12",
+        ],
+    )
     parser.add_argument(
         "--inst_dict_path",
         type=str,
         default="/home/ubuntu/minirts/data/dataset/dict.pt",
     )
-    parser.add_argument("--coach_random_init", type=bool, default=False)
 
     args = parser.parse_args()
 
     return args
 
 
-def get_coach_path(coach, coach_variant=None):
-    if "cloned" in coach:
-        coach_path = coach["best_coach"]
-    else:
-        coach_str = (
-            "best_coach" if coach_variant is None else f"best_coach_{coach_variant}"
-        )
-        coach_path = wandb.restore(coach[coach_str], run_path=coach["run_path"]).name
-        wandb.restore(coach[coach_str] + ".params", run_path=coach["run_path"])
-
-    return coach_path
-
-
-def get_executor_path(executor, exec_variant=None):
-    if "cloned" in executor:
-        exec_path = executor["best_exec"]
-    else:
-        exec_str = "best_exec" if exec_variant is None else f"best_exec_{exec_variant}"
-        exec_path = wandb.restore(
-            executor[exec_str], run_path=executor["run_path"]
-        ).name
-        wandb.restore(
-            executor[exec_str] + ".params",
-            run_path=executor["run_path"],
-        )
-
-    return exec_path
-
-
 def self_play(args):
 
-    wandb.init(
-        project="adapt-minirts-pop-eval", sync_tensorboard=True, dir=args.wandb_dir
-    )
+    wandb.init(project="adapt-minirts", sync_tensorboard=True, dir=args.wandb_dir)
     # run_id = f"multitask-fixed_selfplay-{args.coach1}-{args.executor1}-{args.train_mode}-rule{args.rule}-{args.tag}"
     wandb.run.name = (
-        f"multitask-pop-eval-{wandb.run.id}-{args.coach1}-{args.executor1}"
+        f"multitask-fixed_analyse-int-{wandb.run.id}-{args.coach1}-{args.executor1}"
         f"-{args.train_mode}-rule{args.rule}-{args.tag}"
     )
     # wandb.run.save()
@@ -211,19 +234,60 @@ def self_play(args):
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    # args.coach1 = get_coach_path(model_dicts["ft_pop[80,40,20]"][0], coach_variant=80)
-    # args.executor1 = get_executor_path(model_dicts["ft_pop[80,40,20]"][0])
+    output_list = []
 
-    args.coach1 = get_coach_path(model_dicts["ft_both[80]"][0])
-    args.executor1 = get_executor_path(model_dicts["ft_both[80]"][0])
+    print("Overriding args.model.... with random model")
+    # models = ['both_finetuned_rule80',
+    #  'both_finetuned_rule3',
+    #  'both_finetuned_rule7',
+    #  "both_finetuned_rule14",
+    #  "both_finetuned_rule12"]
+    # models = ['both_finetuned_rule80', 'both_finetuned_rule3', 'behaviour_cloned', 'hier_exec_finetuned_rule21',
+    #          "hier_exec_finetuned_rule80", "both_finetuned_rule12", "both_finetuned_rule7",
+    #          "hier_exec_finetuned_rule14", "both_finetuned_rule3", "hier_coach_finetuned_rule80", "hier_coach_finetuned_rule21"]
 
-    args.coach2 = get_coach_path(model_dicts["bc"][0])
-    args.executor2 = get_executor_path(model_dicts["bc"][0])
+    models = [
+        "hier_exec_finetuned_rule21",
+        "hier_exec_finetuned_rule80",
+        "hier_exec_finetuned_rule14",
+    ]
 
+    # models = ["hier_coach_finetuned_rule80", "hier_coach_finetuned_rule21"]
+
+    args.model = random.choice(models)
+    print(f"Using model {args.model}")
+
+    print("Overriding args.rule.... with random rule")
+    rules = [80, 7, 14, 12, 3]
+    args.rule = random.choice(rules)
+    print(f"Using rule {args.rule}")
+
+    if args.model == "behaviour_cloned":
+        args.coach1 = best_coaches["rnn500"]
+        args.executor1 = best_executors["rnn"]
+    else:
+        print("Reloading coach model.... ")
+        print("Reloading executor model.... ")
+        model_dict = model_dicts[args.model]
+        args.coach1 = wandb.restore(
+            model_dict["best_coach"], run_path=model_dict["run_path"]
+        ).name
+        wandb.restore(
+            model_dict["best_coach"] + ".params", run_path=model_dict["run_path"]
+        )
+        args.executor1 = wandb.restore(
+            model_dict["best_exec"], run_path=model_dict["run_path"]
+        ).name
+        wandb.restore(
+            model_dict["best_exec"] + ".params", run_path=model_dict["run_path"]
+        )
+
+    args.coach2 = args.coach1
+    args.executor2 = args.executor1
     _coach1 = os.path.basename(args.coach1).replace(".pt", "")
     _executor1 = os.path.basename(args.executor1).replace(".pt", "")
 
-    log_name = "multitask-pop-eval-analyze_c1_type={}_c2_type={}__e1_type={}_e2_type={}__lr={}__num_sp={}__num_rb={}_{}_{}".format(
+    log_name = "multitask-fixed-analyze-int_c1_type={}_c2_type={}__e1_type={}_e2_type={}__lr={}__num_sp={}__num_rb={}_{}_{}".format(
         _coach1,
         args.coach2,
         _executor1,
@@ -261,32 +325,38 @@ def self_play(args):
         device=device,
         args=args,
         writer=writer,
-        trainable=True,
-        exec_sample=True,
+        trainable=False,
+        exec_sample=False,
     )
 
     print("Progress: ")
+
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    print(f"sp_agent coach params: {count_parameters(sp_agent.model.coach)}")
+    print(f"sp_agent exec params: {count_parameters(sp_agent.model.executor)}")
     ## Create Save folder:
     working_rule_dir = os.path.join(sp_agent.save_folder, "rules")
     create_working_dir(args, working_rule_dir)
 
     cur_iter_idx = 1
-    rules = [args.rule]
-    for rule_idx in rules:
-        print("Current rule: {}".format(rule_idx))
-        game = MultiTaskGame(sp_agent, bc_agent, cur_iter_idx, args, working_rule_dir)
-        game.analyze_rule_games(
-            cur_iter_idx,
-            rules,
-            "train",
-            viz=args.viz,
-            num_games=0,
-            num_sp=100,
-        )
-        game.terminate()
-        del game
+    rule_idx = args.rule
+    game = MultiTaskGame(sp_agent, bc_agent, cur_iter_idx, args, working_rule_dir)
+    for r in [80, 40, 20, 21, 14, 7, 3, 12, 13]:
+        game.print_rule_desc(r, split="train")
 
     writer.close()
+
+    print("#" * 40)
+    print("#" * 40)
+    print("#" * 40)
+    print()
+    print("\n\n".join(output_list))
+    print()
+    print("#" * 40)
+    print("#" * 40)
+    print("#" * 40)
 
 
 if __name__ == "__main__":

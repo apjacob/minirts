@@ -96,27 +96,28 @@ def init_mt_games(
     ]
 
     game_id = 0
-    rnd_num = random.randint(1, num_rb - 1)
-    for i in range(num_rb):
-        if game_option.seed == 777:
-            seed = random.randint(1, 123456)
-        else:
-            seed = game_option.seed
+    if num_rb > 0:
+        rnd_num = random.randint(0, num_rb - 1)
+        for i in range(num_rb):
+            if game_option.seed == 777:
+                seed = random.randint(1, 123456)
+            else:
+                seed = game_option.seed
 
-        bot1, g = create_game(act1_dc, ai1_option, game_option, game_id, seed)
+            bot1, g = create_game(act1_dc, ai1_option, game_option, game_id, seed)
 
-        rule_type = i % len(idx2utype)
-        utype = idx2utype[rule_type]
-        bot2 = minirts.MediumAI(ai2_option, 0, None, utype, 1)  # Utype + tower
+            rule_type = i % len(idx2utype)
+            utype = idx2utype[rule_type]
+            bot2 = minirts.MediumAI(ai2_option, 0, None, utype, 1)  # Utype + tower
 
-        g.add_bot(bot1)
-        g.add_bot(bot2)
+            g.add_bot(bot1)
+            g.add_bot(bot2)
 
-        if viz and i == rnd_num:
-            g.add_default_spectator()
+            if viz and i == rnd_num:
+                g.add_default_spectator()
 
-        context.push_env_thread(g)
-        game_id += 1
+            context.push_env_thread(g)
+            game_id += 1
 
     for i in range(num_sp):
         if game_option.seed == 777:
@@ -129,6 +130,66 @@ def init_mt_games(
 
         g.add_bot(bot1)
         g.add_bot(bot2)
+        context.push_env_thread(g)
+        game_id += 1
+
+    return context, act1_dc, act2_dc
+
+
+def create_drift_games(
+    num_sp,
+    num_rb,
+    args,
+    ai1_option,
+    ai2_option,
+    game_option,
+    *,
+    act_name="act",
+    viz=False
+):
+    # print('ai1 option:')
+    # print(ai1_option.info())
+    # print('ai2 option:')
+    # print(ai2_option.info())
+    # print('game option:')
+    # print(game_option.info())
+
+    if game_option.seed == 777:
+        print("Using random seeds...")
+
+    total_games = num_sp + num_rb
+    batchsize = min(32, max(total_games // 2, 1))
+
+    act1_dc = tube.DataChannel(act_name + "1", batchsize, 1)
+    act2_dc = tube.DataChannel(act_name + "2", batchsize, 1)
+    context = tube.Context()
+    idx2utype = [
+        minirts.UnitType.SPEARMAN,
+        minirts.UnitType.SWORDMAN,
+        minirts.UnitType.CAVALRY,
+        minirts.UnitType.DRAGON,
+        minirts.UnitType.ARCHER,
+    ]
+
+    game_id = 0
+    rnd_num = random.randint(0, num_rb - 1)
+    for i in range(num_rb):
+        if game_option.seed == 777:
+            seed = random.randint(1, 123456)
+        else:
+            seed = game_option.seed
+
+        bot1, g = create_game(act1_dc, ai1_option, game_option, game_id, seed)
+
+        utype = idx2utype[random.randint(0, len(idx2utype) - 1)]
+        bot2 = minirts.MediumAI(ai2_option, 0, None, utype, 1)  # Utype + tower
+
+        g.add_bot(bot1)
+        g.add_bot(bot2)
+
+        if viz and i == rnd_num:
+            g.add_default_spectator()
+
         context.push_env_thread(g)
         game_id += 1
 

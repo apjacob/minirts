@@ -132,6 +132,12 @@ def parse_args():
     )
     parser.add_argument("--coach_random_init", type=bool, default=False)
     parser.add_argument("--split_train", type=bool, default=False)
+    parser.add_argument("--same_opt", type=bool, default=False)
+    parser.add_argument(
+        "--inst_dict_path",
+        type=str,
+        default="/home/ubuntu/minirts/data/dataset/dict.pt",
+    )
     args = parser.parse_args()
 
     return args
@@ -213,7 +219,6 @@ def self_play(args):
 
         ## Sharing executors
         args.executor1 = sp_agent.model.executor
-
         sp_agent.init_save_folder(wandb.run.name)
 
         bc_agent = Agent(
@@ -229,6 +234,20 @@ def self_play(args):
 
         agent_dict[int(rule)] = {"sp_agent": sp_agent, "bc_agent": bc_agent}
 
+    if args.same_opt:
+        params = []
+        for k, v in agent_dict.items():
+            agent = v["sp_agent"]
+            coach_params = list(agent.model.coach.parameters())
+            params += coach_params
+
+        params += list(agent.model.executor.parameters())
+        optimizer = optim.Adam(params, lr=args.lr)
+
+        for k, v in agent_dict.items():
+            agent = v["sp_agent"]
+            agent.set_optimizer(optimizer)
+
     print("Progress: ")
     ## Create Save folder:
     working_rule_dir = os.path.join(sp_agent.save_folder, "rules")
@@ -242,15 +261,16 @@ def self_play(args):
 
     for epoch in range(args.train_epochs):
         for rule_idx in rules:
-
-            # if epoch % args.eval_factor == 0:
-            #     for eval_rule_idx in rules:
-            #         sp_agent = agent_dict[eval_rule_idx]["sp_agent"]
-            #         bc_agent = agent_dict[eval_rule_idx]["bc_agent"]
-            #         game = MultiTaskGame(
-            #             sp_agent, bc_agent, cur_iter_idx, args, working_rule_dir
-            #         )
-            #         game.evaluate_lifelong_rules(cur_iter_idx, [eval_rule_idx], "train")
+            if cur_iter_idx % args.eval_factor == 0:
+                for eval_rule_idx in rules:
+                    sp_agent = agent_dict[eval_rule_idx]["sp_agent"]
+                    bc_agent = agent_dict[eval_rule_idx]["bc_agent"]
+                    game = MultiTaskGame(
+                        sp_agent, bc_agent, cur_iter_idx, args, working_rule_dir
+                    )
+                    game.evaluate_lifelong_rules(cur_iter_idx, [eval_rule_idx], "train")
+                    game.terminate()
+                    del game
 
             sp_agent = agent_dict[rule_idx]["sp_agent"]
             bc_agent = agent_dict[rule_idx]["bc_agent"]

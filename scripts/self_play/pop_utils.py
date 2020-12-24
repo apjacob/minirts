@@ -8,6 +8,7 @@ root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 model_root = os.path.join(root, "pretrained_models")
 
 model_dicts = {}
+NUM_TRIALS = 10
 base_model_dicts = {
     "bc": [
         {
@@ -17,7 +18,7 @@ base_model_dicts = {
             "best_exec": os.path.join(model_root, "executor_rnn.pt"),
         }
     ]
-    * 20,
+    * NUM_TRIALS,
     "bc_zero": [
         {
             "cloned": True,
@@ -25,15 +26,15 @@ base_model_dicts = {
             "best_exec": os.path.join(model_root, "executor_zero.pt"),
         }
     ],
-    "ft_both[80]": [
-        {
-            "rule": 80,
-            "model": "decent-bush-217",
-            "run_path": "apjacob/adapt-minirts/250vw2ty",
-            "best_exec": "best_exec_checkpoint_421.pt",
-            "best_coach": "best_coach_checkpoint_421.pt",
-        }
-    ],
+    # "ft_both[80]": [
+    #     {
+    #         "rule": 80,
+    #         "model": "decent-bush-217",
+    #         "run_path": "apjacob/adapt-minirts/250vw2ty",
+    #         "best_exec": "best_exec_checkpoint_421.pt",
+    #         "best_coach": "best_coach_checkpoint_421.pt",
+    #     }
+    # ],
     "ft_zero[80]": [
         {
             "rule": 80,
@@ -43,46 +44,64 @@ base_model_dicts = {
             "best_coach": "best_coach_checkpoint_1801.pt",
         }
     ],
-    # "ft_pop[80,40,20]": [
-    #     {
-    #         "rule": [80, 40, 20],
-    #         "model": "lyric-leaf-1",
-    #         "run_path": "apjacob/adapt-minirts-pop/1qumof17",
-    #         "best_exec": "best_exec_checkpoint_40_1622.pt",
-    #         "best_coach_80": "best_coach_checkpoint_80_841.pt",
-    #         "best_coach_40": "best_coach_checkpoint_80_841.pt",
-    #         "best_coach_20": "best_coach_checkpoint_80_841.pt",
-    #     }
-    # ],
-    # "ft_pop[3,12,13]": [
-    #     {
-    #         "rule": [3, 12, 13],
-    #         "model": "lunar-fog-7",
-    #         "run_path": "apjacob/adapt-minirts-pop/1ygw8r46",
-    #         "best_exec": "best_exec_checkpoint_3_1561.pt",
-    #         "best_coach_3": "best_coach_checkpoint_3_1561.pt",
-    #         "best_coach_13": "best_coach_checkpoint_13_1443.pt",
-    #         "best_coach_12": "best_coach_checkpoint_12_1262.pt",
-    #     }
-    # ],
-    "ft_both[12]": [
+    "ft_coach[14]": [
         {
-            "rule": 12,
-            "model": "sandy-forest-196",
-            "run_path": "apjacob/adapt-minirts/1zk0an30",
-            "best_exec": "best_exec_checkpoint_1841.pt",
-            "best_coach": "best_coach_checkpoint_1841.pt",
+            "rule": 14,
+            "model": "dark-elevator-188",
+            "run_path": "apjacob/adapt-minirts/flkl5oy2",
+            "best_exec": "best_exec_checkpoint_1961.pt",
+            "best_coach": "best_coach_checkpoint_1961.pt",
         }
     ],
-    "ft_both[7]": [
+    "ft_coach[7]": [
         {
             "rule": 7,
-            "model": "vibrant-monkey-195",
-            "run_path": "apjacob/adapt-minirts/1czxzs7k",
-            "best_exec": "best_exec_checkpoint_581.pt",
-            "best_coach": "best_coach_checkpoint_581.pt",
+            "model": "ruby-feather-199",
+            "run_path": "apjacob/adapt-minirts/4isepghm",
+            "best_exec": "best_exec_checkpoint_1801.pt",
+            "best_coach": "best_coach_checkpoint_1801.pt",
         }
     ],
+    # # "ft_pop[80,40,20]": [
+    # #     {
+    # #         "rule": [80, 40, 20],
+    # #         "model": "lyric-leaf-1",
+    # #         "run_path": "apjacob/adapt-minirts-pop/1qumof17",
+    # #         "best_exec": "best_exec_checkpoint_40_1622.pt",
+    # #         "best_coach_80": "best_coach_checkpoint_80_841.pt",
+    # #         "best_coach_40": "best_coach_checkpoint_80_841.pt",
+    # #         "best_coach_20": "best_coach_checkpoint_80_841.pt",
+    # #     }
+    # # ],
+    # # "ft_pop[3,12,13]": [
+    # #     {
+    # #         "rule": [3, 12, 13],
+    # #         "model": "lunar-fog-7",
+    # #         "run_path": "apjacob/adapt-minirts-pop/1ygw8r46",
+    # #         "best_exec": "best_exec_checkpoint_3_1561.pt",
+    # #         "best_coach_3": "best_coach_checkpoint_3_1561.pt",
+    # #         "best_coach_13": "best_coach_checkpoint_13_1443.pt",
+    # #         "best_coach_12": "best_coach_checkpoint_12_1262.pt",
+    # #     }
+    # # ],
+    # "ft_both[12]": [
+    #     {
+    #         "rule": 12,
+    #         "model": "sandy-forest-196",
+    #         "run_path": "apjacob/adapt-minirts/1zk0an30",
+    #         "best_exec": "best_exec_checkpoint_1841.pt",
+    #         "best_coach": "best_coach_checkpoint_1841.pt",
+    #     }
+    # ],
+    # "ft_both[7]": [
+    #     {
+    #         "rule": 7,
+    #         "model": "vibrant-monkey-195",
+    #         "run_path": "apjacob/adapt-minirts/1czxzs7k",
+    #         "best_exec": "best_exec_checkpoint_581.pt",
+    #         "best_coach": "best_coach_checkpoint_581.pt",
+    #     }
+    # ],
     "ft_hier_exec[80]": [
         {
             "rule": 80,
@@ -128,15 +147,15 @@ base_model_dicts = {
             "best_coach": "best_coach_checkpoint_1141.pt",
         }
     ],
-    "ft_both[3]": [
-        {
-            "rule": 3,
-            "model": "glorious-plasma-197",
-            "run_path": "apjacob/adapt-minirts/1iy0lk2d",
-            "best_exec": "best_exec_checkpoint_1921.pt",
-            "best_coach": "best_coach_checkpoint_1921.pt",
-        }
-    ],
+    # "ft_both[3]": [
+    #     {
+    #         "rule": 3,
+    #         "model": "glorious-plasma-197",
+    #         "run_path": "apjacob/adapt-minirts/1iy0lk2d",
+    #         "best_exec": "best_exec_checkpoint_1921.pt",
+    #         "best_coach": "best_coach_checkpoint_1921.pt",
+    #     }
+    # ],
     "ft_zero[3]": [
         {
             "rule": 3,
@@ -166,13 +185,11 @@ base_model_dicts = {
     ],
 }
 
-NUM_TRIALS = 15
-
 
 def populate_fixed_model_dicts():
     pre = "ft"
     mids = ["coach", "zero", "hier_exec", "both"]
-    rules = ["3", "80", "21", "12"]
+    rules = ["3", "80", "21", "12", "13"]
 
     full_results_df = pd.read_csv(
         os.path.join(

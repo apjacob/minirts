@@ -128,6 +128,11 @@ def parse_args():
     parser.add_argument("--pg", type=str, default="ppo")
     parser.add_argument("--ppo_eps", type=float, default=0.2)
     parser.add_argument("--ppo_epochs", type=int, default=3)
+    parser.add_argument(
+        "--inst_dict_path",
+        type=str,
+        default="/home/ubuntu/minirts/data/dataset/dict.pt",
+    )
 
     args = parser.parse_args()
 

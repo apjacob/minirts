@@ -146,184 +146,148 @@ def parse_args():
 model_dicts = model_dicts
 
 
-experiment_dict = {
-    "Drift measured with the cloned coach": {
-        "bc-bc": {
-            "coach": model_dicts["bc"],
-            "executor": model_dicts["bc"],
-            "env": 80,
-        },
-        "bc-ft_both[80]": {
-            "coach": model_dicts["bc"],
-            "executor": model_dicts["ft_both[80]"],
-            "env": 80,
-        },
-        "bc-ft_pop[80,40,20]": {
-            "coach": model_dicts["bc"],
-            "executor": model_dicts["ft_pop[80,40,20]"],
-            "env": 80,
-        },
+experiment_dict_2 = {
+    # #################
+    # "bc-bc-12": {
+    #     "bc-bc": {
+    #         "coach": model_dicts["bc"],
+    #         "executor": model_dicts["bc"],
+    #         "env": 12,
+    #     },
+    # },
+    # "ft_both[12]-ft_both[12]-12": {
+    #     "ft_both[12]-ft_both[12]": {
+    #         "coach": model_dicts["ft_both[12]"],
+    #         "executor": model_dicts["ft_both[12]"],
+    #         "env": 12,
+    #     }
+    # },
+    # "ft_pop[3,12,13]_12-ft_pop[3,12,13]-12": {
+    #     "ft_pop[3,12,13]_12-ft_pop[3,12,13]": {
+    #         "coach": {
+    #             "coach": model_dicts["ft_pop[3,12,13]"],
+    #             "variant": 12,
+    #             "random": False,
+    #         },
+    #         "executor": model_dicts["ft_pop[3,12,13]"],
+    #         "env": 12,
+    #     },
+    # },
+    # #################
+    # "bc-bc-13": {
+    #     "bc-bc": {
+    #         "coach": model_dicts["bc"],
+    #         "executor": model_dicts["bc"],
+    #         "env": 13,
+    #     },
+    # },
+    # #################
+    # "ft_coach[14]-ft_pop[80,40,20]-14": {
+    #     "ft_coach[14]-ft_pop[80,40,20]": {
+    #         "coach": model_dicts["ft_coach[14]"],
+    #         "executor": model_dicts["ft_pop[80,40,20]"],
+    #         "env": 14,
+    #     },
+    # },
+    # "ft_coach[14]-ft_both[80]-14": {
+    #     "ft_coach[14]-ft_both[80]-14": {
+    #         "coach": model_dicts["ft_coach[14]"],
+    #         "executor": model_dicts["ft_both[80]"],
+    #         "env": 14,
+    #     }
+    # },
+    # #################
+    # "ft_coach[7]-ft_pop[80,40,20]-7": {
+    #     "ft_coach[7]-ft_pop[80,40,20]": {
+    #         "coach": model_dicts["ft_coach[7]"],
+    #         "executor": model_dicts["ft_pop[80,40,20]"],
+    #         "env": 7,
+    #     },
+    # },
+    # "ft_coach[7]-ft_both[80]-7": {
+    #     "ft_coach[7]-ft_both[80]-7": {
+    #         "coach": model_dicts["ft_coach[7]"],
+    #         "executor": model_dicts["ft_both[80]"],
+    #         "env": 7,
+    #     },
+    # },
+    # #################
+    # "ft_pop[3,12,13]_13-ft_pop[3,12,13]-13": {
+    #     "ft_pop[3,12,13]_13-ft_pop[3,12,13]": {
+    #         "coach": {
+    #             "coach": model_dicts["ft_pop[3,12,13]"],
+    #             "variant": 13,
+    #             "random": False,
+    #         },
+    #         "executor": model_dicts["ft_pop[3,12,13]"],
+    #         "env": 13,
+    #     },
+    # },
+    #################
+    "ft_both[13]-ft_both[13]-13": {
+        "ft_both[13]-ft_both[13]": {
+            "coach": model_dicts["ft_both[13]"],
+            "executor": model_dicts["ft_both[13]"],
+            "env": 13,
+        }
     },
-    "Drift measured with a fine-tuned coach on a new rule": {
-        "ft_coach[21]-bc": {
-            "coach": model_dicts["ft_coach[21]"],
-            "executor": model_dicts["bc"],
-            "env": 21,
-        },
-        "ft_coach[21]-ft_hier_exec[21]": {
-            "coach": model_dicts["ft_coach[21]"],
-            "executor": model_dicts["ft_hier_exec[21]"],
-            "env": 21,
-        },
-        "ft_coach[21]-ft_both[80]": {
-            "coach": model_dicts["ft_coach[21]"],
-            "executor": model_dicts["ft_both[80]"],
-            "env": 21,
-        },
-        "ft_coach[21]-ft_pop[80,40,20]": {
-            "coach": model_dicts["ft_coach[21]"],
-            "executor": model_dicts["ft_pop[80,40,20]"],
-            "env": 21,
-        },
-    },
-    "Drift measured with the cloned exec": {
-        "ft_both[80]-bc": {
-            "coach": model_dicts["ft_both[80]"],
-            "executor": model_dicts["bc"],
-            "env": 80,
-        },
-        "ft_pop[80,40,20]_80-bc": {
-            "coach": {
-                "coach": model_dicts["ft_pop[80,40,20]"],
-                "variant": 80,
-                "random": False,
-            },
-            "executor": model_dicts["bc"],
-            "env": 80,
-        },
-    },
-    "Drift measured with a fine-tuned exec on a new rule": {
-        "bc-ft_hier_exec[21]": {
-            "coach": model_dicts["bc"],
-            "executor": model_dicts["ft_hier_exec[21]"],
-            "env": 21,
-        },
-        "ft_both[80]-ft_hier_exec[21]": {
-            "coach": model_dicts["ft_both[80]"],
-            "executor": model_dicts["ft_hier_exec[21]"],
-            "env": 21,
-        },
-        "ft_pop[80,40,20]_80-ft_hier_exec[21]": {
-            "coach": {
-                "coach": model_dicts["ft_pop[80,40,20]"],
-                "variant": 80,
-                "random": False,
-            },
-            "executor": model_dicts["ft_hier_exec[21]"],
-            "env": 21,
-        },
-    },
-    "Drift measured with a random coach": {
-        "random-ft_pop[80,40,20]": {
-            "coach": {
-                "coach": model_dicts["bc"],
-                "variant": None,
-                "random": True,
-            },
-            "executor": model_dicts["ft_pop[80,40,20]"],
-            "env": 80,
-        },
-        "random-ft_both[80]": {
-            "coach": {
-                "coach": model_dicts["bc"],
-                "variant": None,
-                "random": True,
-            },
-            "executor": model_dicts["ft_both[80]"],
-            "env": 80,
-        },
-        "ft_coach[21]-ft_pop[80,40,20]": {
-            "coach": model_dicts["ft_coach[21]"],
-            "executor": model_dicts["ft_pop[80,40,20]"],
-            "env": 80,
-        },
-        "ft_coach[21]-ft_both[80]": {
-            "coach": model_dicts["ft_coach[21]"],
-            "executor": model_dicts["ft_both[80]"],
-            "env": 80,
-        },
-    },
-    "Performance measured on the original rules": {
-        "bc-bc": {
-            "coach": model_dicts["bc"],
-            "executor": model_dicts["bc"],
-            "env": 80,
-        },
-        "_-ft_zero[80]": {
-            "coach": {
-                "coach": model_dicts["bc"],
-                "variant": None,
-                "random": True,
-            },
-            "executor": model_dicts["ft_zero[80]"],
-            "env": 80,
-        },
-        "ft_both[80]-ft_both[80]": {
-            "coach": model_dicts["ft_both[80]"],
-            "executor": model_dicts["ft_both[80]"],
-            "env": 80,
-        },
-        "ft_pop[80,40,20]_80-ft_pop[80,40,20]": {
+    "ft_pop[80,40,20]_80-ft_pop[80,40,20]-21": {
+        "ft_pop[80,40,20]_80-ft_pop[80,40,20]-21": {
             "coach": {
                 "coach": model_dicts["ft_pop[80,40,20]"],
                 "variant": 80,
                 "random": False,
             },
             "executor": model_dicts["ft_pop[80,40,20]"],
-            "env": 80,
+            "env": 21,
         },
     },
-    "Performance when adapting to new rules": {
-        "bc-bc": {
+    # "ft_both[80]-ft_both[80]-21": {
+    #     "ft_both[80]-ft_both[80]-21": {
+    #         "coach": model_dicts["ft_both[80]"],
+    #         "executor": model_dicts["ft_both[80]"],
+    #         "env": 21,
+    #     },
+    # },
+    "bc-ft_pop[80,40,20]-21": {
+        "bc-ft_pop[80,40,20]-21": {
             "coach": model_dicts["bc"],
-            "executor": model_dicts["bc"],
-            "env": 3,
+            "executor": model_dicts["ft_pop[80,40,20]"],
+            "env": 21,
         },
-        "_-ft_zero[3]": {
+    },
+    # "bc-ft_both[80]-21": {
+    #     "bc-ft_both[80]-21": {
+    #         "coach": model_dicts["bc"],
+    #         "executor": model_dicts["ft_both[80]"],
+    #         "env": 21,
+    #     },
+    # },
+    "random-ft_pop[80,40,20]-21": {
+        "random-ft_pop[80,40,20]-21": {
             "coach": {
                 "coach": model_dicts["bc"],
                 "variant": None,
                 "random": True,
             },
-            "executor": model_dicts["ft_zero[3]"],
-            "env": 3,
-        },
-        "ft_both[3]-ft_both[3]": {
-            "coach": model_dicts["ft_both[3]"],
-            "executor": model_dicts["ft_both[3]"],
-            "env": 3,
-        },
-        "ft_pop[3,12,13]_3-ft_pop[3,12,13]": {
-            "coach": {
-                "coach": model_dicts["ft_pop[3,12,13]"],
-                "variant": 3,
-                "random": False,
-            },
-            "executor": model_dicts["ft_pop[3,12,13]"],
-            "env": 3,
+            "executor": model_dicts["ft_pop[80,40,20]"],
+            "env": 21,
         },
     },
+    # "random-ft_both[80]-21": {
+    #     "random-ft_both[80]-21": {
+    #         "coach": {
+    #             "coach": model_dicts["bc"],
+    #             "variant": None,
+    #             "random": True,
+    #         },
+    #         "executor": model_dicts["ft_both[80]"],
+    #         "env": 21,
+    #     },
+    # },
 }
 
-experiment_list = [
-    "Drift measured with the cloned coach",
-    "Drift measured with a fine-tuned coach on a new rule",
-    "Drift measured with the cloned exec",
-    "Drift measured with a fine-tuned exec on a new rule",
-    "Drift measured with a random coach",
-    "Performance measured on the original rules",
-    "Performance when adapting to new rules",
-]
+experiment_list_2 = list(experiment_dict_2.keys())
 
 
 def get_coach_path(coach, coach_variant=None):
@@ -362,7 +326,7 @@ def self_play(args):
     )
     # run_id = f"multitask-fixed_selfplay-{args.coach1}-{args.executor1}-{args.train_mode}-rule{args.rule}-{args.tag}"
     date = datetime.date(datetime.now())
-    wandb.run.name = f"multitask-pop-eval-{wandb.run.id}-{date}-{args.tag}"
+    wandb.run.name = f"multitask-pop-eval-2-{wandb.run.id}-{date}-{args.tag}"
     # wandb.run.save()
     wandb.config.update(args)
 
@@ -375,7 +339,9 @@ def self_play(args):
     result_dict = {}
 
     exp_code = args.experiment_code
-    eval_exp_list = [experiment_list[exp_code]] if exp_code != -1 else experiment_list
+    eval_exp_list = (
+        [experiment_list_2[exp_code]] if exp_code != -1 else experiment_list_2
+    )
     partial_json_save_dir = os.path.join(args.eval_folder, f"eval-{date}-{args.tag}")
 
     if os.path.exists(partial_json_save_dir):
@@ -401,7 +367,7 @@ def self_play(args):
         print("-" * 40)
         sub_exp_result_dict = {}
 
-        for (sub_exp_name, sub_exp_dict) in experiment_dict[exp_name].items():
+        for (sub_exp_name, sub_exp_dict) in experiment_dict_2[exp_name].items():
             print("*" * 40)
             print(f"Sub experiment name: {sub_exp_name}")
             print("*" * 40)
@@ -434,6 +400,19 @@ def self_play(args):
             ):
                 coaches = [coaches[0]] * len(execs) + [coaches[1]] * len(execs)
                 execs = execs * 2
+                num_total_sub_exps = len(execs)
+
+            if sub_exp_name != "ft_coach[14]-bc" and sub_exp_name.startswith(
+                "ft_coach[14]"
+            ):
+                coaches = [coaches[0]] * len(execs)
+                execs = execs
+                num_total_sub_exps = len(execs)
+            if sub_exp_name != "ft_coach[7]-bc" and sub_exp_name.startswith(
+                "ft_coach[7]"
+            ):
+                coaches = [coaches[0]] * len(execs)
+                execs = execs
                 num_total_sub_exps = len(execs)
 
             for (coach, executor) in zip(

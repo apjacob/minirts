@@ -315,3 +315,109 @@ class ExecutorWrapper(nn.Module):
         # log_probs, masks = self.log_probs(batch, executor_reply)
 
         return log_prob, old_exec_log_probs, entropy, value
+
+
+class MultiExecutorWrapper(ExecutorWrapper):
+    def __init__(self, coach, executors, num_insts, max_raw_chars, cheat, inst_mode):
+        assert isinstance(executors, dict)
+        self.executors = executors
+        super().__init__(
+            coach, executors["bc"], num_insts, max_raw_chars, cheat, inst_mode
+        )
+
+    def forward(self, batch, exec_sample=False):
+        replies = {}
+        if self.coach is not None:
+            # assert not self.coach.training
+            coach_input = self.coach.format_coach_input(batch)
+            word_based = is_word_based(self.executor.args.inst_encoder_type)
+
+            inst_mode = self.inst_mode
+
+            inst, inst_len, inst_cont, coach_reply, log_prob_reply = self.coach.sample(
+                coach_input, inst_mode, word_based
+            )
+        else:
+            inst, inst_len, inst_cont, coach_reply = self._get_human_instruction(batch)
+
+        replies["bc_coach"] = move_to_cpu(coach_reply)
+        # assert not self.executor.training
+        executor_input = self.executor.format_executor_input(
+            batch, inst, inst_len, inst_cont
+        )
+        executor_reply = self.executor.compute_prob(executor_input)
+
+        if exec_sample:
+            (
+                pre_log_prob_sum,
+                pre_log_probs,
+                one_hot_reply,
+                sample_reply,
+            ) = construct_samples(executor_reply)
+
+            batch["log_prob_sum"] = pre_log_prob_sum
+            batch.update(pre_log_probs)
+            batch.update(one_hot_reply)
+            batch.update(sample_reply)
+            replies["bc_executor"] = {
+                "one_hot_reply": move_to_cpu(one_hot_reply),
+                "executor_reply": move_to_cpu(executor_reply),
+            }
+            executor_reply = one_hot_reply
+            ####
+
+        main_reply = format_reply(batch, coach_reply, executor_reply)
+        batch.update(main_reply)
+
+        ## Added more elements to batch
+        batch["e_inst"] = inst
+        batch["e_inst_len"] = inst_len
+        batch["e_inst_cont"] = inst_cont
+
+        ## Add coach old log probs for PPO
+        old_coach_log_probs = self.coach.sampler.get_log_prob(
+            log_prob_reply["probs"], log_prob_reply["samples"]
+        )
+        batch["old_coach_log_probs"] = old_coach_log_probs.detach()
+
+        for key, executor in self.executors.items():
+            if key == "bc":
+                continue
+
+            executor_input = executor.format_executor_input(
+                batch, inst, inst_len, inst_cont
+            )
+            executor_reply = executor.compute_prob(executor_input)
+
+            if exec_sample:
+                (
+                    pre_log_prob_sum,
+                    pre_log_probs,
+                    one_hot_reply,
+                    sample_reply,
+                ) = construct_samples(executor_reply)
+                ####
+
+            replies[key] = {
+                "one_hot_reply": move_to_cpu(one_hot_reply),
+                "executor_reply": move_to_cpu(executor_reply),
+            }
+
+        return main_reply, log_prob_reply, replies
+
+
+def move_to_cpu(obj):
+    if torch.is_tensor(obj):
+        return obj.cpu()
+    elif isinstance(obj, dict):
+        res = {}
+        for k, v in obj.items():
+            res[k] = move_to_cpu(v)
+        return res
+    elif isinstance(obj, list):
+        res = []
+        for v in obj:
+            res.append(move_to_cpu(v))
+        return res
+    else:
+        raise TypeError("Invalid type for move_to")

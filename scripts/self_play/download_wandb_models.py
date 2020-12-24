@@ -36,7 +36,8 @@ from executor import Executor
 from common_utils import to_device, ResultStat, Logger
 from best_models import best_executors, best_coaches
 from tqdm import tqdm
-from multitask_pop_eval import *
+from multitask_pop_eval_2 import experiment_list_2, experiment_dict_2
+from multitask_pop_eval_3 import *
 from datetime import datetime
 from game import *
 import wandb
@@ -59,9 +60,11 @@ def self_play(args):
         os.makedirs(args.save_dir)
 
     result_dict = {}
-
+    main_exp_list = experiment_list_3
+    main_exp_dict = experiment_dict_3
+    print("Downloading files for the following experiments: ", main_exp_list)
     exp_code = args.experiment_code
-    eval_exp_list = [experiment_list[exp_code]] if exp_code != -1 else experiment_list
+    eval_exp_list = [main_exp_list[exp_code]] if exp_code != -1 else main_exp_list
 
     model_save_dir = os.path.join(
         args.save_folder,
@@ -84,7 +87,7 @@ def self_play(args):
         print("-" * 40)
         sub_exp_result_dict = {}
 
-        for (sub_exp_name, sub_exp_dict) in experiment_dict[exp_name].items():
+        for (sub_exp_name, sub_exp_dict) in main_exp_dict[exp_name].items():
             print("*" * 40)
             print(f"Sub experiment name: {sub_exp_name}")
             print("*" * 40)
@@ -105,6 +108,23 @@ def self_play(args):
             else:
                 exec_variant = None
 
+            if sub_exp_name != "ft_coach[21]-bc" and sub_exp_name.startswith(
+                "ft_coach[21]"
+            ):
+                coaches = [coaches[0]] * len(execs) + [coaches[1]] * len(execs)
+                execs = execs * 2
+            if sub_exp_name != "ft_coach[14]-bc" and sub_exp_name.startswith(
+                "ft_coach[14]"
+            ):
+                coaches = [coaches[0]] * len(execs)
+                execs = execs
+                num_total_sub_exps = len(execs)
+            if sub_exp_name != "ft_coach[7]-bc" and sub_exp_name.startswith(
+                "ft_coach[7]"
+            ):
+                coaches = [coaches[0]] * len(execs)
+                execs = execs
+
             num_sub_exps = 0
             model_paths = []
             for (coach, executor) in zip(
@@ -114,7 +134,9 @@ def self_play(args):
                     continue
 
                 print(f"Experiment number: {num_sub_exps}")
-                args.coach1 = get_coach_path(coach, coach_variant=coach_variant)
+                coach_model_name, args.coach1 = get_coach_path(
+                    coach, coach_variant=coach_variant
+                )
                 if random_coach:
                     args.coach_random_init = True
                 else:
@@ -122,44 +144,55 @@ def self_play(args):
 
                 random_number = randint(1, 100000)
 
-                args.executor1 = get_executor_path(executor, exec_variant=exec_variant)
+                exec_model_name, args.executor1 = get_executor_path(
+                    executor, exec_variant=exec_variant
+                )
                 coach_path = args.coach1
                 executor_path = args.executor1
 
-                new_coach_path = shutil.copyfile(
-                    coach_path,
-                    os.path.join(
-                        model_save_dir,
-                        f"exp-{num_sub_exps}-{random_number}-{os.path.basename(coach_path)}",
-                    ),
-                )
+                print(f"Coach Path: {args.coach1}")
+                print(f"Executor Path: {args.executor1}")
 
-                coach_param_path = shutil.copyfile(
-                    f"{coach_path}.params",
-                    os.path.join(
-                        model_save_dir,
-                        f"exp-{num_sub_exps}-{random_number}-{os.path.basename(coach_path)}.params",
-                    ),
-                )
+                if "cloned" not in coach:
+                    new_coach_fn = f"exp-{num_sub_exps}-{random_number}-{coach_model_name}-{os.path.basename(coach_path)}"
+                    new_coach_fp = os.path.join(
+                        os.path.dirname(coach_path), new_coach_fn
+                    )
+                    new_coach_params_fp = os.path.join(
+                        os.path.dirname(coach_path), f"{new_coach_fn}.params"
+                    )
+                    os.rename(coach_path, new_coach_fp)
+                    os.rename(f"{coach_path}.params", new_coach_params_fp)
 
-                new_executor_path = shutil.copyfile(
-                    executor_path,
-                    os.path.join(
-                        model_save_dir,
-                        f"exp-{num_sub_exps}-{random_number}-{os.path.basename(executor_path)}",
-                    ),
-                )
+                    copied_coach_path = shutil.copy2(new_coach_fp, model_save_dir)
 
-                executor_param_path = shutil.copyfile(
-                    f"{executor_path}.params",
-                    os.path.join(
-                        model_save_dir,
-                        f"exp-{num_sub_exps}-{random_number}-{os.path.basename(executor_path)}.params",
-                    ),
-                )
+                    copied_coach_param_path = shutil.copy2(
+                        new_coach_params_fp, model_save_dir
+                    )
+                else:
+                    copied_coach_path = coach_path
+
+                if "cloned" not in executor:
+                    new_executor_fn = f"exp-{num_sub_exps}-{random_number}-{exec_model_name}-{os.path.basename(executor_path)}"
+                    new_executor_fp = os.path.join(
+                        os.path.dirname(executor_path), new_executor_fn
+                    )
+                    new_executor_params_fp = os.path.join(
+                        os.path.dirname(executor_path), f"{new_executor_fp}.params"
+                    )
+                    os.rename(executor_path, new_executor_fp)
+                    os.rename(f"{executor_path}.params", new_executor_params_fp)
+
+                    copied_executor_path = shutil.copy2(new_executor_fp, model_save_dir)
+
+                    executor_param_path = shutil.copy2(
+                        new_executor_params_fp, model_save_dir
+                    )
+                else:
+                    copied_executor_path = executor_path
 
                 model_paths.append(
-                    {"coach": new_coach_path, "executor": new_executor_path}
+                    {"coach": copied_coach_path, "executor": copied_executor_path}
                 )
                 num_sub_exps += 1
 

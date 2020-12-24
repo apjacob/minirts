@@ -28,12 +28,20 @@ import shutil
 
 UNITS = ["swordman", "spearman", "cavalry", "archer", "dragon"]
 UNIT_DICT = {unit: i for i, unit in enumerate(UNITS)}
+# rps_dict = {
+#     "swordman": "Effective against spearmen, No bonus against {archer, swordman}, Not effective against cavalry, Cannot attack dragons",
+#     "spearman": "Effective against cavalry, No bonus against {archer, spearman}, Not effective against swordman, Cannot attack dragons",
+#     "cavalry": "Effective against swordman, No bonus against {archer, cavalry}, Not effective against spearman, Cannot attack dragons",
+#     "archer": "Effective against dragon, Not effective against {spearmen, cavalry, swordman, archer}",
+#     "dragon": "No bonus against {spearmen, cavalry, swordman, dragon}, Not effective against archer",
+# }
+
 rps_dict = {
-    "swordman": "Effective against {spearmen}, No bonus against {archer, swordman}, Not effective against {cavalry}, Cannot attack {Dragon}",
-    "spearman": "Effective against {cavalry}, No bonus against {archer, spearman}, Not effective against {swordman}, Cannot attack {Dragon}",
-    "cavalry": "Effective against {swordman}, No bonus against {archer, cavalry}, Not effective against {spearman}, Cannot attack {Dragon}",
-    "archer": "Effective against {Dragon}, Not effective against {spearmen, cavalry, swordman, archer}",
-    "dragon": "Effective against {-}, No bonus against {spearmen, cavalry, swordman}, Not effective against {archer} ",
+    "swordman": "1.0 & 1.5 & 0.5 & 1.0 & 0.0",
+    "spearman": "0.5 & 1.0 & 1.5 & 1.0 & 0.0",
+    "cavalry": "1.5 & 0.5 & 1.0 & 1.0 & 0.0",
+    "archer": "0.5 & 0.5 & 0.5 & 0.5 & 2.0",
+    "dragon": "1.0 & 1.0 & 1.0 & 0.5 & 1.0",
 }
 
 
@@ -207,6 +215,30 @@ class MultiTaskGame(Game):
             num_sp, num_rb, self.args, ai1_option, ai2_option, game_option, viz=viz
         )
 
+    def init_drift_games(self, rule, num_sp=None, num_rb=None, viz=False):
+        lua_files = self.generate_files(rule)
+
+        os.environ["LUA_PATH"] = os.path.join(lua_files, "?.lua")
+        print("lua path:", os.environ["LUA_PATH"])
+
+        game_option = get_game_option(self.args, lua_files)
+        ai1_option, ai2_option = get_ai_options(
+            self.args,
+            [
+                self.agent1.model.coach.num_instructions,
+                self.agent1.model.coach.num_instructions,
+            ],
+        )
+
+        ## Launching games
+        if num_sp is None or num_rb is None:
+            num_sp = self.args.num_sp
+            num_rb = self.args.num_rb
+
+        self.context, self.act1_dc, self.act2_dc = create_drift_games(
+            num_sp, num_rb, self.args, ai1_option, ai2_option, game_option, viz=viz
+        )
+
     def init_rule_games_botvbot(self, bot1idx, bot2idx, rule, num_games, viz=False):
         lua_files = self.generate_files(rule)
 
@@ -371,7 +403,7 @@ class MultiTaskGame(Game):
         return results
 
     def analyze_rule_games(
-        self, epoch, rule_idx, split="valid", viz=False, num_games=100
+        self, epoch, rule_idx, split="valid", viz=False, num_games=100, num_sp=0
     ):
         device = torch.device("cuda:%d" % self.args.gpu)
         num_games = num_games
@@ -389,13 +421,16 @@ class MultiTaskGame(Game):
         results = {}
         for rule_id in rule_idx:  ##TODO: Not randomized
             rule = permute[rule_id]
-            self.init_rule_games(rule, num_sp=0, num_rb=num_games, viz=viz)
+            self.init_rule_games(rule, num_sp=num_sp, num_rb=num_games, viz=viz)
             agent1, agent2 = self.start()
 
             agent1.eval()
             agent2.eval()
 
-            pbar = tqdm(total=num_games)
+            if num_sp > 0:
+                pbar = tqdm(total=num_games * 2 + num_sp)
+            else:
+                pbar = tqdm(total=num_games)
 
             while not self.finished():
 
@@ -430,6 +465,15 @@ class MultiTaskGame(Game):
                 "loss": a1_result.loss / a1_result.num_games,
             }
 
+            if num_sp > 0:
+                print("#" * 50)
+                print(f"Win: {a1_result.win / a1_result.num_games}")
+                print(f"Loss: {self.agent2.result.win / self.agent2.result.num_games}")
+                print(
+                    f"Draw: {(a1_result.loss - self.agent2.result.win) / self.agent2.result.num_games}"
+                )
+                print("#" * 50)
+
             cur_iter_idx += 1
             print(results)
             # counter = Counter()
@@ -454,9 +498,60 @@ class MultiTaskGame(Game):
             )
             avg_win_rate += wl["win"] / len(rule_idx)
 
-        print("Average win rate: {}".format(avg_win_rate))
+        if num_sp == 0:
+            print("Average win rate: {}".format(avg_win_rate))
 
         return results
+
+    def print_rule_desc(self, rule_idx, split="train"):
+        if split == "valid":
+            permute = self.valid_permute
+        elif split == "test":
+            permute = self.test_permute
+        elif split == "train":
+            permute = self.train_permute
+        else:
+            raise Exception("Invalid split.")
+        rule = permute[rule_idx]
+        rule_rps_dict = rps_dict.copy()
+        for i, unit in enumerate(rule):
+            rule_rps_dict[UNITS[i]] = rps_dict[unit]
+
+        rule_mappings = {
+            80: "original",
+            40: "B",
+            20: "C",
+            21: "D",
+            14: "E",
+            7: "F",
+            3: "G",
+            12: "H",
+            13: "J",
+        }
+        rule_letter = rule_mappings[rule_idx]
+        # print(f"############- Rule: {rule_idx} -###################")
+        print("\\begin{table*}[h!]")
+        print("\centering")
+        print("\\begin{tabular}{|l||c|c|c|c|c|}")
+        print("\hline")
+        print("& \multicolumn{5}{|c|}{\\textbf{Attack multiplier}} \\\\")
+        print("\hline")
+        print("\hline")
+        print(
+            "\\textbf{Unit name} & \\textbf{Swordman} & \\textbf{Spearman} & \\textbf{Cavalry} & \\textbf{Archer} & \\textbf{Dragon} \\\\"
+        )
+        print("\hline")
+        for unit, multiplier in rule_rps_dict.items():
+            print(f"\\textsc{{{unit}}} & {multiplier} \\\\")
+            print("\hline")
+
+        print("\end{tabular}\\\\")
+        print(
+            f"\caption{{\label{{Table:{rule_letter}}} Rule "
+            + f"{rule_letter} attack modifier}}"
+        )
+        print("\end{table*}")
+        # print("#" * 50)
 
     def analyze_rule_games_vbot(
         self, epoch, rule_idx, split="valid", viz=False, num_games=100
@@ -734,6 +829,88 @@ class MultiTaskGame(Game):
             self.agent1.save_executor(epoch)
 
         return results
+
+    def drift_analysis_games(
+        self, epoch, rule_idx, split="valid", viz=False, num_games=1
+    ):
+        device = torch.device("cuda:%d" % self.args.gpu)
+        num_games = num_games
+        permute = self.train_permute
+
+        cur_iter_idx = 0
+        results = {}
+        reply_dicts = []
+        for rule_id in rule_idx:  ##TODO: Not randomized
+            rule = permute[rule_id]
+            self.init_drift_games(rule, num_sp=0, num_rb=num_games, viz=viz)
+            agent1, agent2 = self.start()
+
+            agent1.eval()
+            agent2.eval()
+
+            # pbar = tqdm(total=num_games)
+
+            while not self.finished():
+
+                data = self.get_input()
+
+                if len(data) == 0:
+                    continue
+                for key in data:
+                    # print(key)
+                    batch = to_device(data[key], device)
+
+                    if key == "act1":
+                        batch["actor"] = "act1"
+                        reply, replies = agent1.simulate(cur_iter_idx, batch)
+                        t_count = agent1.update_logs(cur_iter_idx, batch, reply)
+                        reply_dicts.append(replies)
+
+                    elif key == "act2":
+                        batch["actor"] = "act2"
+                        reply = agent2.simulate(cur_iter_idx, batch)
+                        t_count = agent2.update_logs(cur_iter_idx, batch, reply)
+
+                    else:
+                        assert False
+
+                    self.set_reply(key, reply)
+                    # pbar.update(t_count)
+
+            a1_result = self.agent1.result
+
+            results[rule_id] = {
+                "win": a1_result.win / a1_result.num_games,
+                "loss": a1_result.loss / a1_result.num_games,
+            }
+
+            cur_iter_idx += 1
+            print(results)
+            # counter = Counter()
+            # for game_id, insts in agent1.traj_dict.items():
+            #     for inst in insts:
+            #         counter[inst] += 1
+            #
+            # print("##### TOP N Instructions #####")
+            # print(counter.most_common(10))
+            # print("##############################")
+
+            # pbar.close()
+            self.terminate()
+
+        avg_win_rate = 0
+        for rule, wl in results.items():
+            wandb.log(
+                {
+                    "{}/{}/Win".format(split, rule): wl["win"],
+                    "{}/{}/Loss".format(split, rule): wl["loss"],
+                }
+            )
+            avg_win_rate += wl["win"] / len(rule_idx)
+
+        print("Average win rate: {}".format(avg_win_rate))
+
+        return results, reply_dicts
 
 
 def create_working_dir(args, working_dir):
